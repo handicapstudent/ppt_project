@@ -38,7 +38,7 @@ def has_existing_reservation(user_id):
 
 
 # 예약 정보 가져오기
-def get_user_reservation(user_id):
+def get_user(user_id):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("SELECT * FROM reservations WHERE user_id = ?", (user_id,))
@@ -75,7 +75,7 @@ def is_seat_reserved(restaurant, seat):
 
 
 # 예약 저장 함수
-def save_reservation(user_id, restaurant, seat, start_time, end_time):
+def save_user(user_id, restaurant, seat, start_time, end_time):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("""
