@@ -1,6 +1,8 @@
 # main.py
 import os
 import sqlite3
+from PyQt5.QtCore import QSize
+from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout,
     QMessageBox, QDialog, QHBoxLayout, QScrollArea, QGroupBox, QCheckBox
