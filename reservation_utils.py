@@ -1,13 +1,12 @@
 import sqlite3
+from PyQt5.QtCore import QSize
+from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import (
     QDialog, QPushButton, QVBoxLayout, QLabel, QGridLayout, QTimeEdit,
     QDialogButtonBox, QMessageBox, QWidget, QHBoxLayout
 )
 from PyQt5.QtCore import QTimer, QTime, Qt
 import datetime
-from settings import AppSettings
-from tts import speak
-
 
 DB_FILE = "reservations.db"
 
@@ -121,15 +120,11 @@ class SeatReservationDialog(QDialog):
     def initUI(self):
         layout = QVBoxLayout()
         layout.addWidget(QLabel("좌석을 선택하세요 (1인 1좌석 예약 가능)"))
-        if AppSettings.tts_enabled:
-            speak(  "좌석을 선택하세요 (1인 1좌석 예약 가능)" )
-
-        # 예약 취소 버튼
+    
         cancel_btn = QPushButton("예약 취소")
         cancel_btn.clicked.connect(self.on_cancel_reservation)
         layout.addWidget(cancel_btn)
-
-        # 현재 예약 정보 표시
+    
         current_res = get_user_reservation(self.user_id)
         if current_res:
             restaurant = current_res[2]
@@ -139,36 +134,82 @@ class SeatReservationDialog(QDialog):
             seat_info = f"현재 예약: {restaurant}, 좌석 {seat}, {start_time} ~ {end_time}"
         else:
             seat_info = "현재 예약 없음"
-
+    
         self.reservation_label = QLabel(seat_info)
         layout.addWidget(self.reservation_label)
-
+    
+        # ✅ Tkinter 스타일 좌석 배치
+        seat_layout = [
+            "000  000  0000  00  00  000  00  000  00  00  00  000  00",
+            "-                                               ",
+            "000 000  000 00 000 000  000 000 000  000 000 000 00  000",
+            "000 000  000 00 000 000  000 000 000  000 000 000 000 000",
+            "-                                              ",
+            "000 001  000 000 00 00   000 000 000  000 000 000 000 000",
+            "000 000  000 000 00 00   000 000 000  000 000 000 000 000",
+            "-                                                         ",
+            "         000 000 000     00 000 000   000 000 000  0  000",
+            "         000 000  00     00 000 000   00  000 000 000 001",
+            "-                                                         ",
+            "         00 000 00 00    00  00  00   000 000 000 000",
+            "         00 000 00 00    000 000 00   000 000  00 001",
+            "-                                                         ",
+            "         00 00 00 000    00 000 00    000 000 000 00 ",
+            "         00 00 00 00     00 000 00    00  00  000 0 ",
+            "-                                                         ",
+            "         00 00 00 00     00 00 00 00  00 00 00 00",
+            "         00 00 00 00     01 00 00 00  00 00 00 00"
+        ]
+    
         grid = QGridLayout()
-
-        for row in range(3):
-            for col in range(3):
-                seat_name = f"{row + 1}-{col + 1}"
-                btn = QPushButton(seat_name)
-                btn.setFixedSize(60, 60)
-                btn.setEnabled(True)
-                btn.setStyleSheet(self.seat_button_color(seat_name))
-                btn.clicked.connect(lambda _, s=seat_name: self.try_reserve_seat(s))
-                grid.addWidget(btn, row, col)
-                self.seat_buttons[seat_name] = btn
-
-                # 좌석 예약 상태 표시
-                self.update_seat_color(seat_name)
-
+        self.seat_buttons = {}
+    
+        for r, line in enumerate(seat_layout):
+            col = 0
+            for c in line:
+                seat_name = f"{r}-{col}"
+                if c == "0":
+                    btn = QPushButton()
+                    btn.setFixedSize(30, 30)
+                    btn.setStyleSheet("background-color: green;")
+                    btn.setEnabled(False)
+                    grid.addWidget(btn, r, col)
+                elif c == "1":
+                    btn = QPushButton()
+                    btn.setFixedSize(30, 30)
+                    btn.setIcon(QIcon("disable_seat.png"))
+                    btn.setIconSize(QSize(30, 30))
+                    btn.setStyleSheet("border: none; background-color: transparent;")  # ✅ 배경색 제거
+                    btn.clicked.connect(lambda _, s=seat_name: self.try_reserve_seat(s))
+                    self.seat_buttons[seat_name] = btn
+                    grid.addWidget(btn, r, col)
+                
+                elif c == "-":
+                    lbl = QLabel()
+                    lbl.setFixedSize(30, 30)
+                    lbl.setPixmap(QPixmap("empty.png").scaled(30, 30))
+                    lbl.setStyleSheet("background-color: transparent;")  # ✅ 테이블 이미지
+                    grid.addWidget(lbl, r, col)
+                elif c == "3":
+                    pillar = QLabel()
+                    pillar.setFixedSize(30, 30)
+                    pillar.setStyleSheet("background-color: black;")
+                    grid.addWidget(pillar, r, col)
+                elif c == " ":
+                    blank = QLabel()
+                    blank.setFixedSize(30, 30)
+                    blank.setStyleSheet("background-color: white; border: none;")
+                    grid.addWidget(blank, r, col)
+                col += 1
+    
         layout.addLayout(grid)
         self.setLayout(layout)
-
-        # 예약 좌석 색상 갱신 타이머 (1분마다)
+    
         self.refresh_timer = QTimer(self)
         self.refresh_timer.timeout.connect(self.refresh_seat_colors)
         self.refresh_timer.start(60000)
-
-        # 예약 좌석 즉시 활성화 갱신
         self.refresh_seat_colors()
+
 
     def seat_button_color(self, seat_name):
         reservation = get_seat_reservation(self.restaurant_name, seat_name)
@@ -200,8 +241,6 @@ class SeatReservationDialog(QDialog):
 
     def try_reserve_seat(self, seat_name):
         if has_existing_reservation(self.user_id):
-            if AppSettings.tts_enabled:
-                speak("예약 불가 이미 예약된 좌석이 있습니다.")
             QMessageBox.warning(self, "예약 불가", "이미 예약된 좌석이 있습니다.")
             return
         if is_seat_reserved(self.restaurant_name, seat_name):
@@ -213,10 +252,6 @@ class SeatReservationDialog(QDialog):
         self.open_time_dialog()
 
     def open_time_dialog(self):
-
-        if AppSettings.tts_enabled:
-            speak("예약시간을 선택하세요")
-
         dialog = QDialog(self)
         dialog.setWindowTitle("예약 시간 선택")
         layout = QVBoxLayout()
@@ -236,15 +271,11 @@ class SeatReservationDialog(QDialog):
             now = datetime.datetime.now()
 
             if start_time <= now:
-                if AppSettings.tts_enabled:
-                    speak("현재 시간보다 이후를 선택하세요")
                 QMessageBox.warning(self, "오류", "현재 시간보다 이후를 선택하세요.")
                 return
 
             # 현재 좌석이 그 시간에 이미 예약되어 있는지 다시 체크
             if is_seat_reserved(self.restaurant_name, self.selected_seat):
-                if AppSettings.tts_enabled:
-                    speak("예약 불가 이미 예약된 좌석입니다.")
                 QMessageBox.warning(self, "예약 불가", "이미 예약된 좌석입니다.")
                 self.refresh_seat_colors()
                 return
@@ -252,8 +283,6 @@ class SeatReservationDialog(QDialog):
             end_time = start_time + datetime.timedelta(minutes=30)
             save_reservation(self.user_id, self.restaurant_name, self.selected_seat, start_time, end_time)
             dialog.accept()
-            if AppSettings.tts_enabled:
-                speak(f"{start_time.strftime('%H:%M')}에 예약되었습니다.")
             QMessageBox.information(self, "예약 완료", f"{start_time.strftime('%H:%M')}에 예약되었습니다.")
             self.reservation_label.setText(
                 f"현재 예약: {self.selected_seat}, {start_time.strftime('%H:%M')} ~ {end_time.strftime('%H:%M')}")
@@ -266,17 +295,11 @@ class SeatReservationDialog(QDialog):
     def on_cancel_reservation(self):
         res = get_user_reservation(self.user_id)
         if not res:
-            if AppSettings.tts_enabled:
-                speak("취소할 예약이 없습니다.")
             QMessageBox.information(self, "예약 없음", "취소할 예약이 없습니다.")
             return
-        if AppSettings.tts_enabled:
-            speak("예약을 취소하시겠습니까?")
         reply = QMessageBox.question(self, "예약 취소", "예약을 취소하시겠습니까?", QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.Yes:
             cancel_reservation(self.user_id)
-            if AppSettings.tts_enabled:
-                speak("취소 완료 예약이 취소되었습니다.")
             QMessageBox.information(self, "취소 완료", "예약이 취소되었습니다.")
             self.reservation_label.setText("현재 예약 없음")
             self.refresh_seat_colors()
