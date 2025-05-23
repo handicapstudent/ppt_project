@@ -5,6 +5,9 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import QTimer, QTime, Qt
 import datetime
+from settings import AppSettings
+from tts import speak
+
 
 DB_FILE = "reservations.db"
 
@@ -23,6 +26,14 @@ def init_db():
         end_time TEXT
     )
     """)
+    c.execute("""
+       CREATE TABLE IF NOT EXISTS users (
+           user_id TEXT PRIMARY KEY,
+           password TEXT,
+           security_question TEXT,
+           security_answer TEXT
+       )
+       """)
     conn.commit()
     conn.close()
 
@@ -110,6 +121,8 @@ class SeatReservationDialog(QDialog):
     def initUI(self):
         layout = QVBoxLayout()
         layout.addWidget(QLabel("좌석을 선택하세요 (1인 1좌석 예약 가능)"))
+        if AppSettings.tts_enabled:
+            speak(  "좌석을 선택하세요 (1인 1좌석 예약 가능)" )
 
         # 예약 취소 버튼
         cancel_btn = QPushButton("예약 취소")
@@ -119,9 +132,14 @@ class SeatReservationDialog(QDialog):
         # 현재 예약 정보 표시
         current_res = get_user_reservation(self.user_id)
         if current_res:
-            seat_info = f"현재 예약: {current_res[3]}, {current_res[4][11:16]} ~ {current_res[5][11:16]}"
+            restaurant = current_res[2]
+            seat = current_res[3]
+            start_time = current_res[4][11:16]
+            end_time = current_res[5][11:16]
+            seat_info = f"현재 예약: {restaurant}, 좌석 {seat}, {start_time} ~ {end_time}"
         else:
             seat_info = "현재 예약 없음"
+
         self.reservation_label = QLabel(seat_info)
         layout.addWidget(self.reservation_label)
 
@@ -182,6 +200,8 @@ class SeatReservationDialog(QDialog):
 
     def try_reserve_seat(self, seat_name):
         if has_existing_reservation(self.user_id):
+            if AppSettings.tts_enabled:
+                speak("예약 불가 이미 예약된 좌석이 있습니다.")
             QMessageBox.warning(self, "예약 불가", "이미 예약된 좌석이 있습니다.")
             return
         if is_seat_reserved(self.restaurant_name, seat_name):
@@ -193,6 +213,10 @@ class SeatReservationDialog(QDialog):
         self.open_time_dialog()
 
     def open_time_dialog(self):
+
+        if AppSettings.tts_enabled:
+            speak("예약시간을 선택하세요")
+
         dialog = QDialog(self)
         dialog.setWindowTitle("예약 시간 선택")
         layout = QVBoxLayout()
@@ -212,11 +236,15 @@ class SeatReservationDialog(QDialog):
             now = datetime.datetime.now()
 
             if start_time <= now:
+                if AppSettings.tts_enabled:
+                    speak("현재 시간보다 이후를 선택하세요")
                 QMessageBox.warning(self, "오류", "현재 시간보다 이후를 선택하세요.")
                 return
 
             # 현재 좌석이 그 시간에 이미 예약되어 있는지 다시 체크
             if is_seat_reserved(self.restaurant_name, self.selected_seat):
+                if AppSettings.tts_enabled:
+                    speak("예약 불가 이미 예약된 좌석입니다.")
                 QMessageBox.warning(self, "예약 불가", "이미 예약된 좌석입니다.")
                 self.refresh_seat_colors()
                 return
@@ -224,6 +252,8 @@ class SeatReservationDialog(QDialog):
             end_time = start_time + datetime.timedelta(minutes=30)
             save_reservation(self.user_id, self.restaurant_name, self.selected_seat, start_time, end_time)
             dialog.accept()
+            if AppSettings.tts_enabled:
+                speak(f"{start_time.strftime('%H:%M')}에 예약되었습니다.")
             QMessageBox.information(self, "예약 완료", f"{start_time.strftime('%H:%M')}에 예약되었습니다.")
             self.reservation_label.setText(
                 f"현재 예약: {self.selected_seat}, {start_time.strftime('%H:%M')} ~ {end_time.strftime('%H:%M')}")
@@ -236,11 +266,17 @@ class SeatReservationDialog(QDialog):
     def on_cancel_reservation(self):
         res = get_user_reservation(self.user_id)
         if not res:
+            if AppSettings.tts_enabled:
+                speak("취소할 예약이 없습니다.")
             QMessageBox.information(self, "예약 없음", "취소할 예약이 없습니다.")
             return
+        if AppSettings.tts_enabled:
+            speak("예약을 취소하시겠습니까?")
         reply = QMessageBox.question(self, "예약 취소", "예약을 취소하시겠습니까?", QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.Yes:
             cancel_reservation(self.user_id)
+            if AppSettings.tts_enabled:
+                speak("취소 완료 예약이 취소되었습니다.")
             QMessageBox.information(self, "취소 완료", "예약이 취소되었습니다.")
             self.reservation_label.setText("현재 예약 없음")
             self.refresh_seat_colors()
@@ -251,3 +287,19 @@ def reserve_seat(parent, restaurant_name, user_id):
     init_db()  # DB 초기화
     dialog = SeatReservationDialog(parent, restaurant_name, user_id)
     dialog.exec_()
+
+def save_user(user_id, password, question, answer):
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute("INSERT INTO users (user_id, password, security_question, security_answer) VALUES (?, ?, ?, ?)",
+                  (user_id, password, question, answer))
+        conn.commit()
+        conn.close()
+
+def get_user(user_id):
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+        user = c.fetchone()
+        conn.close()
+        return user
