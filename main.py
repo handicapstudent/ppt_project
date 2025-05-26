@@ -15,6 +15,7 @@ from settings import AppSettings
 from tts import speak
 from reservation_utils import reserve_seat, init_db, save_user, get_user
 from theme import apply_high_contrast, reset_theme
+from menu import RestaurantReservation  # ✔ 메뉴 기능 분리 완료
 
 class MainWindow(QWidget):
     def __init__(self):
@@ -373,87 +374,7 @@ class FindPasswordDialog(QDialog):
             QMessageBox.warning(self, "오류", "답변이 일치하지 않습니다.")
 
 
-# --- 식당 선택 및 예약 창 ---
-class RestaurantReservation(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("학식 예약 프로그램")
-        self.resize(1200, 800)  # 로그인창과 동일한 크기
-        self.current_user_id = None
-        self.initUI()
-    def set_user(self, user_id):
-        self.current_user_id = user_id
 
-    def initUI(self):
-        main_layout = QVBoxLayout()
-
-        title = QLabel("학식 예약 시스템")
-        title.setFont(QFont("Arial", 18, QFont.Bold))
-        title.setAlignment(Qt.AlignCenter)
-        main_layout.addWidget(title)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        content = QWidget()
-        content_layout = QHBoxLayout()
-
-
-        restaurants = [
-            {"name": "한빛식당", "menus": ["김치찌개", "제육볶음", "돈까스"], "allergy": "우유, 땅콩"},
-            {"name": "별빛식당", "menus": ["된장찌개", "생선구이", "오므라이스"], "allergy": "대두, 밀"},
-            {"name": "은하수식당", "menus": ["부대찌개", "닭갈비", "스파게티"], "allergy": "계란, 토마토"}
-        ]
-
-        for restaurant in restaurants:
-            box = self.create_restaurant_box(restaurant)
-            content_layout.addWidget(box)
-
-        content.setLayout(content_layout)
-        scroll.setWidget(content)
-        main_layout.addWidget(scroll)
-        self.setLayout(main_layout)
-
-    def create_restaurant_box(self, restaurant):
-        group_box = QGroupBox()
-        layout = QVBoxLayout()
-
-        name_label = QLabel(restaurant["name"])
-        name_label.setFont(QFont("Arial", 14, QFont.Bold))
-        name_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(name_label)
-
-        menu_label = QLabel("\n".join(restaurant["menus"]))
-        menu_label.setFont(QFont("Arial", 12))
-        layout.addWidget(menu_label)
-
-        allergy_label = QLabel(f"알레르기 정보: {restaurant['allergy']}")
-        allergy_label.setFont(QFont("Arial", 10))
-        layout.addWidget(allergy_label)
-
-        reserve_button = QPushButton("예약하기")
-        reserve_button.clicked.connect(lambda _, r=restaurant["name"]: self.reserve_seat_dialog(r))
-        layout.addWidget(reserve_button)
-
-        review_button = QPushButton("후기 보기/작성")
-        review_button.clicked.connect(lambda _, r=restaurant["name"]: self.open_review_dialog(r))
-        layout.addWidget(review_button)
-
-        group_box.setLayout(layout)
-        group_box.setFixedSize(230, 300)
-        return group_box
-
-    def reserve_seat_dialog(self, restaurant_name):
-        if not self.current_user_id:
-            QMessageBox.warning(self, "오류", "먼저 로그인하세요.")
-            return
-        reserve_seat(self, restaurant_name, self.current_user_id)
-
-    def open_review_dialog(self, restaurant_name):
-        if not self.current_user_id:
-            QMessageBox.warning(self, "오류", "먼저 로그인하세요.")
-            return
-        dialog = ReviewDialog(restaurant_name, self.current_user_id, self)
-        dialog.exec_()
 
 
 # --- 프로그램 실행 ---
