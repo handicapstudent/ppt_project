@@ -1,5 +1,6 @@
 # main.py
 import os
+from menu import RestaurantReservation
 import sqlite3
 from PyQt5.QtCore import QSize
 from PyQt5.QtGui import QIcon, QPixmap
