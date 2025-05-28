@@ -1,13 +1,22 @@
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
-from PyQt5.QtWidgets import QWidget, QLabel, QPushButton, QVBoxLayout, QScrollArea, QGroupBox, QMessageBox, QDialog
+import webbrowser
+import urllib.parse
+from PyQt5.QtWidgets import QWidget, QLabel, QPushButton, QVBoxLayout, QScrollArea, QGroupBox, QMessageBox, QDialog, QLineEdit
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
 from review import ReviewDialog
 from reservation_utils import reserve_seat
+from distance_utils_kakao import get_distance_text
 
 MENU_URL = "https://www.cbnucoop.com/service/restaurant/"
+
+address_map = {
+    "한빛식당": "충북 청주시 서원구 충대로 1 제1학생회관",
+    "별빛식당": "충북 청주시 서원구 충대로 1 제1학생회관",
+    "은하수식당": "충북대학교 은하수 식당"
+}
 
 def fetch_today_and_week_menus(force_weekday=None):
     try:
@@ -80,7 +89,7 @@ class RestaurantReservation(QWidget):
             group = QGroupBox(name)
             layout = QVBoxLayout()
             menu_dict = menus.get(today, {})
-            # 한빛식당 또는 은하수식당만 아침/점심, 점심/저녁 순서 swap!
+
             keys = list(menu_dict.keys())
             if name == "한빛식당" and len(keys) >= 2:
                 keys[0], keys[1] = keys[1], keys[0]
@@ -90,6 +99,13 @@ class RestaurantReservation(QWidget):
             for meal_name in display_order:
                 dishes = menu_dict[meal_name]
                 layout.addWidget(QLabel(f"<b>{meal_name}</b>: {' + '.join(dishes)}"))
+
+            to_addr = address_map.get(name, None)
+            layout.addWidget(QLabel(f"식당 주소: {to_addr}"))
+
+            map_btn = QPushButton("카카오맵 길찾기")
+            map_btn.clicked.connect(lambda _, t=to_addr: self.open_kakao_map_route(t))
+            layout.addWidget(map_btn)
 
             more_btn = QPushButton("메뉴 더보기")
             more_btn.clicked.connect(lambda _, n=name, m=menus: self.show_full_menu(n, m, weekday_map))
@@ -145,3 +161,9 @@ class RestaurantReservation(QWidget):
             return
         dialog = ReviewDialog(restaurant_name, self.current_user_id, self)
         dialog.exec_()
+
+    def open_kakao_map_route(self, to_addr):
+        if to_addr:
+            encoded_to = urllib.parse.quote(to_addr)
+            url = f"https://map.kakao.com/?eName={encoded_to}"
+            webbrowser.open(url)
