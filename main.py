@@ -1,6 +1,7 @@
 # main.py
 import os
 import sys
+from restaurant_ui_relayout import RestaurantReservation
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QPushButton, QVBoxLayout,
     QHBoxLayout, QStackedWidget, QMessageBox, QLabel, QLineEdit, QDialog, QCheckBox
@@ -11,7 +12,7 @@ from PyQt5.QtCore import Qt
 from reservation_utils import init_db, get_user, save_user
 from settings import AppSettings
 from tts import speak
-from menu import RestaurantReservation
+#from menu import RestaurantReservation
 
 
 class LoginPage(QWidget):
@@ -141,19 +142,31 @@ class SignupPage(QWidget):
 
     def initUI(self):
         layout = QVBoxLayout()
-        self.id_input = QLineEdit("새 학번")
-        self.pw_input = QLineEdit("새 비밀번호")
+
+        self.id_input = QLineEdit()
+        self.id_input.setPlaceholderText("새 학번")
+
+        self.pw_input = QLineEdit()
+        self.pw_input.setPlaceholderText("새 비밀번호")
         self.pw_input.setEchoMode(QLineEdit.Password)
-        self.pw_confirm_input = QLineEdit("비밀번호 확인")
+
+        self.pw_confirm_input = QLineEdit()
+        self.pw_confirm_input.setPlaceholderText("비밀번호 확인")
         self.pw_confirm_input.setEchoMode(QLineEdit.Password)
-        self.question_input = QLineEdit("비밀번호 찾기 질문")
-        self.answer_input = QLineEdit("질문 답변")
+
+        self.question_input = QLineEdit()
+        self.question_input.setPlaceholderText("비밀번호 찾기 질문")
+
+        self.answer_input = QLineEdit()
+        self.answer_input.setPlaceholderText("질문 답변")
 
         signup_btn = QPushButton("회원가입")
         signup_btn.clicked.connect(self.signup_check)
 
-        for widget in [self.id_input, self.pw_input, self.pw_confirm_input, self.question_input, self.answer_input, signup_btn]:
+        for widget in [self.id_input, self.pw_input, self.pw_confirm_input,
+                       self.question_input, self.answer_input, signup_btn]:
             layout.addWidget(widget)
+
         self.setLayout(layout)
 
     def signup_check(self):
@@ -187,9 +200,12 @@ class PasswordFindPage(QWidget):
 
     def initUI(self):
         layout = QVBoxLayout()
-        self.id_input = QLineEdit("학번 입력")
+        self.id_input = QLineEdit()
+        self.id_input.setPlaceholderText("학번 입력")
         self.question_display = QLabel("질문이 여기에 표시됩니다.")
-        self.answer_input = QLineEdit("질문에 대한 답변 입력")
+
+        self.answer_input = QLineEdit()
+        self.answer_input.setPlaceholderText("질문에 대한 답변 입력")
         find_btn = QPushButton("확인")
         find_btn.clicked.connect(self.check_answer)
         self.id_input.textChanged.connect(self.display_question)
@@ -228,7 +244,7 @@ class MainWindow(QWidget):
         self.login_page = LoginPage(self)
         self.signup_page = SignupPage(self)
         self.password_page = PasswordFindPage(self)
-        self.restaurant_page = RestaurantReservation(self)
+        self.restaurant_page = RestaurantReservation()
 
         self.stack.addWidget(self.login_page)         # index 0
         self.stack.addWidget(self.signup_page)        # index 1
@@ -247,10 +263,10 @@ class MainWindow(QWidget):
         self.forward_btn.clicked.connect(self.go_forward)
 
         nav_layout = QHBoxLayout()
+        nav_layout.addStretch()  # 먼저 여유 공간을 줘야 오른쪽으로 붙음
         nav_layout.addWidget(self.back_btn)
         nav_layout.addWidget(self.forward_btn)
-        nav_layout.addStretch()
-        nav_layout.setContentsMargins(10, 10, 10, 0)  # 좌상단 위치 조정
+        nav_layout.setContentsMargins(10, 10, 10, 0)  # 여백은 그대로
 
         layout = QVBoxLayout()
         layout.addLayout(nav_layout)
