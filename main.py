@@ -368,51 +368,6 @@ class MainWindow(QWidget):
             self.history_index += 1
             self.stack.setCurrentIndex(self.history[self.history_index])
 
-    def show_sidebar(self):
-        self.sidebar_dialog = QDialog(self)
-        self.sidebar_dialog.setWindowFlags(Qt.FramelessWindowHint)
-        self.sidebar_dialog.setModal(True)
-        self.sidebar_dialog.setStyleSheet("background-color: rgba(0, 0, 0, 70);")
-        self.sidebar_dialog.setFixedSize(self.width(), self.height())
-
-        sidebar_panel = QWidget(self.sidebar_dialog)
-        sidebar_panel.setGeometry(0, 0, int(self.width() * 0.6), self.height())
-        sidebar_panel.setStyleSheet("background-color: white;")
-
-        sidebar_layout = QVBoxLayout(sidebar_panel)
-        sidebar_layout.setContentsMargins(30, 30, 30, 30)
-        sidebar_layout.setSpacing(20)
-
-        user_label = QLabel(f"학번 : {self.current_user_id or '알 수 없음'}")
-        user_label.setFont(QFont("Arial", 14, QFont.Bold))
-        sidebar_layout.addWidget(user_label)
-
-        logout_btn = QPushButton("로그아웃")
-        logout_btn.clicked.connect(lambda: self.logout())
-        sidebar_layout.addWidget(logout_btn)
-
-        tts_checkbox = QCheckBox("TTS 음성안내")
-        tts_checkbox.setChecked(AppSettings.tts_enabled)
-        tts_checkbox.stateChanged.connect(lambda state: setattr(AppSettings, 'tts_enabled', state == Qt.Checked))
-        sidebar_layout.addWidget(tts_checkbox)
-
-        contrast_checkbox = QCheckBox("고대비 모드")
-        contrast_checkbox.stateChanged.connect(self.toggle_contrast_global)
-        sidebar_layout.addWidget(contrast_checkbox)
-
-        profile_btn = QPushButton("개인정보 관리")
-        profile_btn.clicked.connect(self.open_profile_dialog)
-        sidebar_layout.addWidget(profile_btn)
-
-        sidebar_layout.addStretch()
-
-        overlay = QPushButton(self.sidebar_dialog)
-        overlay.setGeometry(int(self.width() * 0.6), 0, int(self.width() * 0.4), self.height())
-        overlay.setStyleSheet("background-color: transparent;")
-        overlay.setCursor(Qt.PointingHandCursor)
-        overlay.clicked.connect(self.sidebar_dialog.close)
-
-        self.sidebar_dialog.show()
 
     def open_profile_dialog(self):
         if self.current_user_id:
