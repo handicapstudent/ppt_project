@@ -78,6 +78,22 @@ class RestaurantReservation(QWidget):
             self.current_user_id = None
             self.initUI()
 
+    def apply_high_contrast(self):
+        self.setStyleSheet("""
+            QWidget {
+                background-color: black;
+                color: white;
+            }
+            QPushButton {
+                background-color: #333;
+                color: white;
+                border: 1px solid white;
+            }
+            QLabel, QCheckBox {
+                color: white;
+            }
+        """)
+
     class StaticMenuCard(QFrame):
         def __init__(self, title, lines):
             super().__init__()
