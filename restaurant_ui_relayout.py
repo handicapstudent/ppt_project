@@ -115,18 +115,11 @@ class RestaurantReservation(QWidget):
         # 상단 바
         top_bar = QHBoxLayout()
 
-        hamburger = QPushButton("☰")
-        hamburger.setFont(QFont("Arial", 24))
-        hamburger.setStyleSheet("QPushButton { border: none; background: transparent; }")
-        hamburger.setCursor(Qt.PointingHandCursor)
-        hamburger.clicked.connect(self.main_window.show_sidebar)  # ✅ 안정적이고 명확
-
         logo = QLabel("충북대학교\nCHUNGBUK NATIONAL UNIVERSITY")
         logo.setFont(QFont("Arial", 12, QFont.Bold))
 
-        top_bar.addWidget(hamburger)
-        top_bar.addSpacing(10)
         top_bar.addWidget(logo)
+
         top_bar.addStretch()
         main_layout.addLayout(top_bar)
 
