@@ -161,6 +161,8 @@ class LoginPage(QWidget):
 
         accessibility_layout = QHBoxLayout()
         contrast_checkbox = QCheckBox("고대비 모드")
+        contrast_checkbox.setObjectName("contrast_checkbox")  # ✅ 이거 꼭 추가
+
         contrast_checkbox.setFont(QFont("Arial", 18))
         contrast_checkbox.setChecked(False)
         contrast_checkbox.stateChanged.connect(self.toggle_contrast)
@@ -191,11 +193,20 @@ class LoginPage(QWidget):
                 speak("로그인 되셨습니다.")
             self.main_window.current_user_id = user_id
             self.main_window.restaurant_page.set_user(user_id)
+
+            # ✅ 고대비 체크박스 상태 전달
+            checkbox = self.findChild(QCheckBox, "contrast_checkbox")
+            if checkbox and checkbox.isChecked():
+                self.main_window.toggle_contrast_global(Qt.Checked)
+            else:
+                self.main_window.toggle_contrast_global(Qt.Unchecked)
+
             self.main_window.navigate_to(2)
         else:
             if AppSettings.tts_enabled:
                 speak("학번 또는 비밀번호가 틀렸습니다.")
             QMessageBox.warning(self, "로그인 실패", "학번 또는 비밀번호가 틀렸습니다.")
+
 
 class SignupPage(QWidget):
     def __init__(self, main_window):
@@ -380,9 +391,25 @@ class MainWindow(QWidget):
 
     def toggle_contrast_global(self, state):
         if state == Qt.Checked:
-            self.setStyleSheet("background-color: black; color: white;")
+            self.setStyleSheet("""
+                QWidget {
+                    background-color: black;
+                    color: white;
+                }
+                QPushButton {
+                    background-color: #333;
+                    color: white;
+                    border: 1px solid white;
+                }
+                QLabel, QCheckBox {
+                    color: white;
+                }
+            """)
+            self.restaurant_page.apply_high_contrast()  # ✅ 로그인 이후 화면도 고대비 적용
         else:
             self.setStyleSheet("")
+            self.restaurant_page.setStyleSheet("")  # 고대비 해제
+
 
 if __name__ == "__main__":
     init_db()
