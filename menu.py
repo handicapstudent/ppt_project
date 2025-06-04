@@ -56,16 +56,42 @@ def fetch_today_and_week_menus(force_weekday=None):
         return {"한빛식당": {}, "별빛식당": {}, "은하수식당": {}}, ['월요일','화요일','수요일','목요일','금요일']
 
 class RestaurantReservation(QWidget):
-    def __init__(self, force_weekday=None):
+    def __init__(self, main_window, force_weekday=None):
         super().__init__()
-        self.setWindowTitle("학식 예약 프로그램")
-        self.resize(1200, 900)
+        self.main_window = main_window  # ← 추가
         self.current_user_id = None
         self.force_weekday = force_weekday
         self.initUI()
 
     def set_user(self, user_id):
         self.current_user_id = user_id
+
+    def apply_high_contrast(self):
+        self.setStyleSheet("""
+            QWidget {
+                background-color: black;
+                color: white;
+            }
+            QLabel {
+                color: white;
+            }
+            QPushButton {
+                background-color: #333;
+                color: white;
+                border: 1px solid white;
+            }
+            QLineEdit {
+                background-color: #222;
+                color: white;
+                border: 1px solid white;
+            }
+            QGroupBox {
+                border: 1px solid white;
+            }
+        """)
+
+    def reset_contrast(self):
+        self.setStyleSheet("")
 
     def initUI(self):
         main_layout = QVBoxLayout()
@@ -127,10 +153,14 @@ class RestaurantReservation(QWidget):
         main_layout.addWidget(scroll)
         self.setLayout(main_layout)
 
+        logout_button = QPushButton("로그아웃")
+        logout_button.clicked.connect(lambda: self.main_window.navigate_to(0))
+        layout.addWidget(logout_button)
+
     def show_full_menu(self, name, menus, weekday_map):
         dialog = QDialog(self)
         dialog.setWindowTitle(f"{name} 한주간 메뉴")
-        dialog.resize(600, 500)
+        dialog.resize(1200, 8000)
         dlg_layout = QVBoxLayout()
         for 요일 in weekday_map:
             day_label = QLabel(f"<b>{요일}</b>")
