@@ -1,8 +1,11 @@
+import os
+
+import arg
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QGridLayout,
     QFrame, QMessageBox, QDialog, QScrollArea
 )
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QPixmap
 from PyQt5.QtCore import Qt
 
 from menu import fetch_today_and_week_menus
@@ -18,8 +21,10 @@ address_map = {
 }
 
 class MenuCard(QFrame):
-    def __init__(self, title, callback):
+    def __init__(self, title, callback, image_path=None):
         super().__init__()
+        self.setCursor(Qt.PointingHandCursor)
+
         self.setStyleSheet("""
             QFrame {
                 background-color: white;
@@ -30,35 +35,48 @@ class MenuCard(QFrame):
                 color: #333;
             }
         """)
-        self.setCursor(Qt.PointingHandCursor)
+
         layout = QVBoxLayout()
         layout.setContentsMargins(15, 15, 15, 15)
         layout.setSpacing(10)
+        layout.setAlignment(Qt.AlignCenter)
+
+        if image_path and os.path.exists(image_path):
+            image_label = QLabel()
+            pixmap = QPixmap(image_path).scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            image_label.setPixmap(pixmap)
+            image_label.setAlignment(Qt.AlignCenter)
+
+            image_label.setStyleSheet("background: transparent; border:none;")
+            layout.addWidget(image_label)
 
         text = QLabel(title)
-        text.setFont(QFont("Arial", 12))
-        text.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-
+        text.setFont(QFont("Noto Sans KR", 12))
+        text.setAlignment(Qt.AlignCenter)
+        text.setStyleSheet("background: transparent; border: none;")
         layout.addWidget(text)
-        layout.addStretch()
+
         self.setLayout(layout)
         self.mousePressEvent = lambda e: callback()
+
 
 class RestaurantSelectDialog(QDialog):
     def __init__(self, title, callback, parent=None):
         super().__init__(parent)
         self.setWindowTitle(title)
-        self.setFixedSize(400, 200)
+        self.setFixedSize(800, 200)         #창크기 변경
         layout = QVBoxLayout()
         grid = QGridLayout()
 
-        restaurants = ["한빛식당", "별빛식당", "은하수식당"]
-        for i, name in enumerate(restaurants):
-            btn = QPushButton(name)
-            btn.setStyleSheet("padding: 20px; font-size: 16px;")
-            btn.clicked.connect(self.make_btn_callback(name, callback))
-            grid.addWidget(btn, 0, i)  # 한 줄에 배치
-
+        cards = [                               #변경 시작
+            ("한빛식당", "assets/메뉴보기.png"),
+            ("별빛식당", "assets/별똥별.png"),
+            ("은하수식당", "assets/은하수.png"),
+        ]
+        for i, (arg, image) in enumerate(cards):
+            card = MenuCard(arg, lambda cb=self.select_restaurant: cb(arg, callback), image)
+            grid.addWidget(card, 0, i)  # 한 줄에 배치
+                                            #변경 끝
         layout.addLayout(grid)
         self.setLayout(layout)
 
@@ -94,6 +112,10 @@ class RestaurantReservation(QWidget):
             }
         """)
 
+    def reset_contrast(self):
+        self.setStyleSheet("background-color: #f4f6f8;")
+        # 내부 메뉴 카드들은 재생성될 때 자동 스타일링되므로 별도 초기화 필요 없음
+
     class StaticMenuCard(QFrame):
         def __init__(self, title, lines):
             super().__init__()
@@ -108,16 +130,16 @@ class RestaurantReservation(QWidget):
                 }
             """)
             layout = QVBoxLayout()
-            layout.setContentsMargins(15, 15, 15, 15)
-            layout.setSpacing(10)
+            layout.setContentsMargins(15, 15, 15, 20)
+            layout.setSpacing(8)
 
             title_label = QLabel(title)
-            title_label.setFont(QFont("Arial", 12, QFont.Bold))
+            title_label.setFont(QFont("Noto Sans KR", 11, QFont.Bold))
             layout.addWidget(title_label)
 
             for line in lines:
                 item_label = QLabel(line)
-                item_label.setFont(QFont("Arial", 10))
+                item_label.setFont(QFont("Noto Sans KR", 10))
                 layout.addWidget(item_label)
 
             self.setLayout(layout)
@@ -130,31 +152,48 @@ class RestaurantReservation(QWidget):
         main_layout.setSpacing(20)
         # 상단 바
         top_bar = QHBoxLayout()
+        top_bar.setContentsMargins(0,0,0,0)
+        # top_bar.setSpacing(6)
+        # logo = QLabel("충북대학교\nCHUNGBUK NATIONAL UNIVERSITY")
+        # logo.setFont(QFont("Arial", 12, QFont.Bold))
 
         logo = QLabel("충북대학교\nCHUNGBUK NATIONAL UNIVERSITY")
-        logo.setFont(QFont("Arial", 12, QFont.Bold))
-
+        logo.setFont(QFont("Arial", 10, QFont.Bold))
+        logo.setFixedHeight(40)
+        logo.setStyleSheet("""
+            QLabel {
+                background: transparent;
+                line-height: 90%;
+                padding-left: 4px;
+            }
+        """)
         top_bar.addWidget(logo)
 
         top_bar.addStretch()
         main_layout.addLayout(top_bar)
 
+
         # 메뉴 카드 그리드
         grid = QGridLayout()
-        grid.setSpacing(20)
+        grid.setSpacing(10)
 
         cards = [
-            ("한빛식당 메뉴 보기", lambda: self.show_menu("한빛식당")),
-            ("별빛식당 메뉴 보기", lambda: self.show_menu("별빛식당")),
-            ("은하수식당 메뉴 보기", lambda: self.show_menu("은하수식당")),
-            ("좌석 예약하기", self.select_seat_reservation),
-            ("후기 작성 게시판", self.select_review_dialog),
-            ("카카오맵 길찾기", self.select_kakao_map)
+            ("한빛식당 메뉴 보기", self.show_menu,"한빛식당", "assets/메뉴보기.png"),
+            ("별빛식당 메뉴 보기", self.show_menu,"별빛식당", "assets/별똥별.png"),
+            ("은하수식당 메뉴 보기", self.show_menu,"은하수식당","assets/은하수.png"),
+            ("좌석 예약하기", lambda:self.select_seat_reservation(), None,"assets/좌석예약.png"),
+            ("후기 작성 게시판", lambda:self.select_review_dialog(), None, "assets/게시판.png"),
+            ("카카오맵 길찾기", lambda:self.select_kakao_map(),None, "assets/지도.png")
         ]
 
-        for i, (title, callback) in enumerate(cards):
+        for i, (title, callback, arg, image) in enumerate(cards):
             row, col = divmod(i, 3)
-            card = MenuCard(title, callback)
+
+            if arg is not None:
+                card = MenuCard(title, lambda arg=arg, cb=callback: cb(arg), image)
+            else:
+                card = MenuCard(title, callback, image)
+
             grid.addWidget(card, row, col)
 
         main_layout.addLayout(grid)
