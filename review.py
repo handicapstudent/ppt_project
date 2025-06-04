@@ -16,7 +16,6 @@ def init_database():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS reviews (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            restaurant_name TEXT NOT NULL,
             user_id TEXT NOT NULL,
             review TEXT NOT NULL,
             rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
@@ -27,14 +26,14 @@ def init_database():
     conn.close()
 
 
-def save_review(user_id, restaurant_name, review_text, rating):
+def save_review(user_id, review_text, rating):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute("""
-        INSERT INTO reviews (restaurant_name, user_id, review, rating, timestamp)
-        VALUES (?, ?, ?, ?, ?)
-    """, (restaurant_name, user_id, review_text, rating, timestamp))
+        INSERT INTO reviews (user_id, review, rating, timestamp)
+        VALUES (?, ?, ?, ?)
+    """, (user_id, review_text, rating, timestamp))
     conn.commit()
     conn.close()
 
@@ -42,26 +41,16 @@ def save_review(user_id, restaurant_name, review_text, rating):
 def get_reviews_by_user(user_id):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, user_id, review, rating, timestamp
-        FROM reviews
-        WHERE user_id = ?
-        ORDER BY timestamp DESC
-    """, (user_id,))
+    cursor.execute("SELECT id, user_id, review, rating, timestamp FROM reviews WHERE user_id = ?", (user_id,))
     reviews = cursor.fetchall()
     conn.close()
     return reviews
 
 
-def get_reviews_by_restaurant(restaurant_name):
+def get_all_reviews():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, user_id, review, rating, timestamp
-        FROM reviews
-        WHERE restaurant_name = ?
-        ORDER BY timestamp DESC
-    """, (restaurant_name,))
+    cursor.execute("SELECT id, user_id, review, rating, timestamp FROM reviews ORDER BY timestamp DESC")
     reviews = cursor.fetchall()
     conn.close()
     return reviews
@@ -98,7 +87,7 @@ class ReviewDialog(QDialog):
 
     def init_ui(self):
         self.rating_value = 3
-        self.setWindowTitle(f"{self.restaurant_name} 후기 작성")
+        self.setWindowTitle("후기 작성")
         self.setMinimumSize(500, 600)
         self.setStyleSheet("""
             QDialog {
@@ -187,7 +176,7 @@ class ReviewDialog(QDialog):
 
     def load_reviews(self):
         self.review_list.clear()
-        self.reviews = get_reviews_by_restaurant(self.restaurant_name)
+        self.reviews = get_all_reviews()
         for review_id, writer_id, text, rating, timestamp in self.reviews:
             stars = "★" * rating + "☆" * (5 - rating)
             display_text = f"[{timestamp}] ({writer_id}) {stars}\n{text}"
@@ -232,7 +221,7 @@ class ReviewDialog(QDialog):
             QMessageBox.information(self, "수정 완료", "후기가 수정되었습니다.")
             self.current_edit_id = None
         else:
-            save_review(self.user_id, self.restaurant_name, review_text, rating)
+            save_review(self.user_id, review_text, rating)
             QMessageBox.information(self, "성공", "후기가 저장되었습니다.")
 
         self.text_edit.clear()
