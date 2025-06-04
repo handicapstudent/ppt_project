@@ -1,11 +1,12 @@
 import sqlite3
 from PyQt5.QtWidgets import (
     QDialog, QTextEdit, QPushButton, QVBoxLayout, QLabel,
-    QMessageBox, QComboBox, QHBoxLayout, QListWidget, QListWidgetItem, QSlider
+    QMessageBox, QHBoxLayout, QListWidget, QListWidgetItem
 )
 from PyQt5.QtCore import Qt
 from datetime import datetime
 from PyQt5.QtGui import QFont
+
 DB_FILE = "review.db"
 
 
@@ -15,6 +16,7 @@ def init_database():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS reviews (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            restaurant_name TEXT NOT NULL,
             user_id TEXT NOT NULL,
             review TEXT NOT NULL,
             rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
@@ -25,14 +27,14 @@ def init_database():
     conn.close()
 
 
-def save_review(user_id, review_text, rating):
+def save_review(user_id, restaurant_name, review_text, rating):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute("""
-        INSERT INTO reviews (user_id, review, rating, timestamp)
-        VALUES (?, ?, ?, ?)
-    """, (user_id, review_text, rating, timestamp))
+        INSERT INTO reviews (restaurant_name, user_id, review, rating, timestamp)
+        VALUES (?, ?, ?, ?, ?)
+    """, (restaurant_name, user_id, review_text, rating, timestamp))
     conn.commit()
     conn.close()
 
@@ -40,7 +42,26 @@ def save_review(user_id, review_text, rating):
 def get_reviews_by_user(user_id):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, review, rating, timestamp FROM reviews WHERE user_id = ?", (user_id,))
+    cursor.execute("""
+        SELECT id, user_id, review, rating, timestamp
+        FROM reviews
+        WHERE user_id = ?
+        ORDER BY timestamp DESC
+    """, (user_id,))
+    reviews = cursor.fetchall()
+    conn.close()
+    return reviews
+
+
+def get_reviews_by_restaurant(restaurant_name):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, user_id, review, rating, timestamp
+        FROM reviews
+        WHERE restaurant_name = ?
+        ORDER BY timestamp DESC
+    """, (restaurant_name,))
     reviews = cursor.fetchall()
     conn.close()
     return reviews
@@ -77,7 +98,7 @@ class ReviewDialog(QDialog):
 
     def init_ui(self):
         self.rating_value = 3
-        self.setWindowTitle("후기 작성")
+        self.setWindowTitle(f"{self.restaurant_name} 후기 작성")
         self.setMinimumSize(500, 600)
         self.setStyleSheet("""
             QDialog {
@@ -91,10 +112,6 @@ class ReviewDialog(QDialog):
                 border: 1px solid #ccc;
                 border-radius: 8px;
                 padding: 8px;
-                font-size: 13px;
-            }
-            QComboBox{
-                padding: 4px;
                 font-size: 13px;
             }
             QPushButton {
@@ -124,9 +141,10 @@ class ReviewDialog(QDialog):
         self.text_edit.setPlaceholderText("이곳에 후기를 입력하세요...")
         layout.addWidget(self.text_edit)
 
-
         rating_layout = QHBoxLayout()
         rating_label = QLabel("별점:")
+        rating_layout.addWidget(rating_label)
+
         self.stars = []
         for i in range(5):
             star = QLabel("☆")
@@ -140,8 +158,6 @@ class ReviewDialog(QDialog):
 
         self.update_star_display()
         layout.addLayout(rating_layout)
-
-
 
         self.submit_button = QPushButton("후기 제출")
         self.submit_button.clicked.connect(self.submit_review)
@@ -163,7 +179,6 @@ class ReviewDialog(QDialog):
         def handler(event):
             self.rating_value = rating
             self.update_star_display()
-
         return handler
 
     def update_star_display(self):
@@ -172,14 +187,28 @@ class ReviewDialog(QDialog):
 
     def load_reviews(self):
         self.review_list.clear()
-        self.reviews = get_reviews_by_user(self.user_id)
-        for review_id, text, rating, timestamp in self.reviews:
+        self.reviews = get_reviews_by_restaurant(self.restaurant_name)
+        for review_id, writer_id, text, rating, timestamp in self.reviews:
             stars = "★" * rating + "☆" * (5 - rating)
-            display_text = f"[{timestamp}]  {stars}\n{text}"
+            display_text = f"[{timestamp}] ({writer_id}) {stars}\n{text}"
             item = QListWidgetItem(display_text)
-            item.setData(Qt.UserRole, review_id)
+            item.setData(Qt.UserRole, (review_id, writer_id))
             item.setFont(QFont("Noto Sans KR", 11))
             self.review_list.addItem(item)
+
+    def load_review_for_edit(self, item):
+        review_id, writer_id = item.data(Qt.UserRole)
+        if writer_id != self.user_id:
+            QMessageBox.warning(self, "권한 오류", "본인의 후기만 수정할 수 있습니다.")
+            return
+
+        for rid, wid, text, rating, timestamp in self.reviews:
+            if rid == review_id:
+                self.current_edit_id = rid
+                self.text_edit.setText(text)
+                self.rating_value = rating
+                self.update_star_display()
+                break
 
     def submit_review(self):
         review_text = self.text_edit.toPlainText().strip()
@@ -189,34 +218,39 @@ class ReviewDialog(QDialog):
         rating = self.rating_value
 
         if self.current_edit_id:
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute("SELECT user_id FROM reviews WHERE id = ?", (self.current_edit_id,))
+            result = cursor.fetchone()
+            conn.close()
+
+            if not result or result[0] != self.user_id:
+                QMessageBox.warning(self, "권한 오류", "본인의 후기만 수정할 수 있습니다.")
+                return
+
             update_review(self.current_edit_id, review_text, rating)
             QMessageBox.information(self, "수정 완료", "후기가 수정되었습니다.")
             self.current_edit_id = None
         else:
-            save_review(self.user_id, review_text, rating)
+            save_review(self.user_id, self.restaurant_name, review_text, rating)
             QMessageBox.information(self, "성공", "후기가 저장되었습니다.")
+
         self.text_edit.clear()
         self.load_reviews()
-
-    def load_review_for_edit(self, item):
-        review_id = item.data(Qt.UserRole)
-        for rid, text, rating, timestamp in self.reviews:
-            if rid == review_id:
-                self.current_edit_id = rid
-                self.text_edit.setText(text)
-                self.rating_value = rating
-                self.update_star_display()
-                break
 
     def delete_selected_review(self):
         selected_item = self.review_list.currentItem()
         if not selected_item:
             QMessageBox.warning(self, "선택 오류", "삭제할 후기를 선택하세요.")
             return
-        review_id = selected_item.data(Qt.UserRole)
+
+        review_id, writer_id = selected_item.data(Qt.UserRole)
+        if writer_id != self.user_id:
+            QMessageBox.warning(self, "권한 오류", "본인의 후기만 삭제할 수 있습니다.")
+            return
+
         delete_review(review_id)
         QMessageBox.information(self, "삭제 완료", "후기가 삭제되었습니다.")
         self.text_edit.clear()
         self.current_edit_id = None
         self.load_reviews()
-
