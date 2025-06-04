@@ -1,19 +1,83 @@
 # main.py
 import os
 import sys
+import shutil
 from restaurant_ui_relayout import RestaurantReservation
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QPushButton, QVBoxLayout,
-    QHBoxLayout, QStackedWidget, QMessageBox, QLabel, QLineEdit, QDialog, QCheckBox, QFrame, QComboBox, QSizePolicy,
-    QGraphicsOpacityEffect)
+    QApplication, QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QStackedWidget, QMessageBox, QLabel, QLineEdit,
+    QDialog, QCheckBox, QFrame, QComboBox, QSizePolicy, QGraphicsOpacityEffect, QFileDialog
+)
 from PyQt5.QtGui import QPixmap, QFont, QIcon
 from PyQt5.QtCore import Qt
 
 from reservation_utils import init_db, get_user, save_user
 from settings import AppSettings
 from tts import speak
-#from menu import RestaurantReservation
 
+class ProfileDialog(QDialog):
+    def __init__(self, user_id, parent=None):
+        super().__init__(parent)
+        self.user_id = user_id
+        self.setWindowTitle("개인정보 관리")
+        self.setFixedSize(400, 450)
+        self.setModal(True)
+        user = get_user(user_id)
+
+        layout = QVBoxLayout()
+        self.id_label = QLabel(f"학번: {user[0]}")
+        layout.addWidget(self.id_label)
+
+        self.pw_input = QLineEdit()
+        self.pw_input.setPlaceholderText("비밀번호 변경 (입력시 변경)")
+        self.pw_input.setEchoMode(QLineEdit.Password)
+        layout.addWidget(self.pw_input)
+
+        self.cert_label = QLabel()
+        self.status_label = QLabel()
+        self.attach_btn = QPushButton("파일 첨부 (장애인등록증)")
+        self.attach_btn.clicked.connect(self.attach_file)
+        self.selected_file = None
+        self.attach_btn.setVisible(False)
+
+        cert_path = user[4] if len(user) > 4 else None
+        if not cert_path:
+            self.status_label.setText("장애인 인증 현황: 인증안됨")
+            self.attach_btn.setVisible(True)
+        else:
+            self.status_label.setText("장애인 인증 현황: 인증중")
+            file_name = os.path.basename(cert_path)
+            self.cert_label.setText(f"첨부파일: {file_name}")
+        layout.addWidget(self.status_label)
+        layout.addWidget(self.cert_label)
+        layout.addWidget(self.attach_btn)
+
+        save_btn = QPushButton("저장")
+        save_btn.clicked.connect(self.save_changes)
+        layout.addWidget(save_btn)
+        self.setLayout(layout)
+
+    def attach_file(self):
+        file_name, _ = QFileDialog.getOpenFileName(self, "장애인등록증 파일 선택", "", "Images (*.png *.jpg *.jpeg *.bmp *.gif)")
+        if file_name:
+            self.selected_file = file_name
+            self.cert_label.setText(os.path.basename(file_name))
+
+    def save_changes(self):
+        user = get_user(self.user_id)
+        new_pw = self.pw_input.text() if self.pw_input.text() else user[1]
+        question = user[2]
+        answer = user[3]
+        cert_path = user[4] if len(user) > 4 else None
+        if self.selected_file:
+            upload_dir = os.path.join(os.path.dirname(__file__), "uploads")
+            os.makedirs(upload_dir, exist_ok=True)
+            basename = f"{self.user_id}_" + os.path.basename(self.selected_file)
+            dest = os.path.join(upload_dir, basename)
+            shutil.copy2(self.selected_file, dest)
+            cert_path = dest
+        save_user(self.user_id, new_pw, question, answer, cert_path)
+        QMessageBox.information(self, "저장 완료", "개인정보가 저장되었습니다.")
+        self.close()
 
 class LoginPage(QWidget):
     def __init__(self, main_window):
@@ -25,7 +89,6 @@ class LoginPage(QWidget):
 
     def initUI(self):
         layout = QVBoxLayout(self)
-
         # 배경
         bg_label = QLabel(self)
         image_path = os.path.join(os.path.dirname(__file__), "충북대학교 정문.jpg")
@@ -45,15 +108,12 @@ class LoginPage(QWidget):
         self.central_widget.move((self.width() - 720) // 2, (self.height() - 600) // 2)
         self.central_widget.setStyleSheet("background-color: rgba(255, 255, 255, 230); border-radius: 32px;")
 
-        # ✅ 완전 투명한 로고+텍스트 영역 (중첩 반투명 방지)
         title_container = QWidget()
-        title_container.setStyleSheet("background: transparent;")  # 배경 없음
-
+        title_container.setStyleSheet("background: transparent;")
         title_layout = QHBoxLayout(title_container)
         title_layout.setContentsMargins(0, 0, 0, 0)
         title_layout.setSpacing(16)
 
-        # 로고
         logo_label = QLabel()
         logo_label.setStyleSheet("background: transparent;")
         logo_path = os.path.join(os.path.dirname(__file__), "HelpMeal.png")
@@ -61,18 +121,13 @@ class LoginPage(QWidget):
             logo_pixmap = QPixmap(logo_path).scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             logo_label.setPixmap(logo_pixmap)
 
-        # 텍스트
         title_text = QLabel("HelpMeal")
         title_text.setFont(QFont("Arial", 40, QFont.Bold))
-        title_text.setStyleSheet("color: #333333; background: transparent;")  # 배경 제거
-
-        # 구성
+        title_text.setStyleSheet("color: #333333; background: transparent;")
         title_layout.addStretch()
         title_layout.addWidget(logo_label)
         title_layout.addWidget(title_text)
         title_layout.addStretch()
-
-        # 로그인 카드에 추가
         central_layout.addWidget(title_container)
 
         self.id_input = QLineEdit()
@@ -121,7 +176,6 @@ class LoginPage(QWidget):
 
         accessibility_layout.addWidget(contrast_checkbox)
         accessibility_layout.addWidget(tts_checkbox)
-
         central_layout.addLayout(accessibility_layout)
         central_layout.addLayout(link_layout)
 
@@ -138,7 +192,7 @@ class LoginPage(QWidget):
         if user and user[1] == password:
             if AppSettings.tts_enabled:
                 speak("로그인 되셨습니다.")
-            self.main_window.current_user_id = user_id  # ✅ 학번 저장
+            self.main_window.current_user_id = user_id
             self.main_window.restaurant_page.set_user(user_id)
             self.main_window.navigate_to(2)
         else:
@@ -146,24 +200,19 @@ class LoginPage(QWidget):
                 speak("학번 또는 비밀번호가 틀렸습니다.")
             QMessageBox.warning(self, "로그인 실패", "학번 또는 비밀번호가 틀렸습니다.")
 
-
 class SignupPage(QWidget):
     def __init__(self, main_window):
         super().__init__()
         self.main_window = main_window
+        self.cert_file = None
         self.initUI()
 
     def initUI(self):
-        # 전체 배경 흰색
         self.setStyleSheet("background-color: white;")
-
-        # 외부 레이아웃 (전체 화면 중앙 정렬용)
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0,0,0,0)
         outer_layout.setSpacing(0)
 
-
-        #중앙 카드 위젯
         self.central_widget = QWidget()
         self.central_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.central_widget.setStyleSheet("""
@@ -187,8 +236,6 @@ class SignupPage(QWidget):
         form_layout.addWidget(title_label)
         form_layout.addSpacing(12)
 
-
-
         def add_field(label_text, widget):
             label = QLabel(label_text)
             label.setFont(QFont("Noto Sans KR",12,QFont.Bold))
@@ -202,13 +249,11 @@ class SignupPage(QWidget):
             form_layout.addWidget(label)
             form_layout.addWidget(widget)
 
-        # 입력 항목
         self.id_input = QLineEdit()
         self.pw_input = QLineEdit()
         self.pw_input.setEchoMode(QLineEdit.Password)
         self.pw_confirm_input = QLineEdit()
         self.pw_confirm_input.setEchoMode(QLineEdit.Password)
-
         self.question_combo = QComboBox()
         self.question_combo.addItems([
             "가장 좋아하는 음식은?",
@@ -217,9 +262,7 @@ class SignupPage(QWidget):
             "기억에 남는 선생님 이름은?",
             "가장 친한 친구 이름은?"
         ])
-
         self.answer_input = QLineEdit()
-
         for w in [self.id_input, self.pw_input, self.pw_confirm_input, self.question_combo, self.answer_input]:
             w.setStyleSheet("""
                 background-color: #ffffff;
@@ -228,13 +271,21 @@ class SignupPage(QWidget):
                 font-size: 16px;
                 border: 1px solid #ddd;
             """)
-
         add_field("새 학번", self.id_input)
         add_field("비밀번호", self.pw_input)
         add_field("비밀번호 확인", self.pw_confirm_input)
         add_field("비밀번호 찾기 질문", self.question_combo)
         add_field("질문 답변", self.answer_input)
-
+        # 장애인등록증 첨부 추가
+        self.cert_label = QLabel("장애인등록증 파일 없음")
+        self.attach_btn = QPushButton("장애인등록증 첨부")
+        self.attach_btn.setStyleSheet("""
+            background-color: #eee; color: #333;
+            border-radius: 12px; padding: 8px; font-size: 14px;
+        """)
+        self.attach_btn.clicked.connect(self.attach_file)
+        form_layout.addWidget(self.cert_label)
+        form_layout.addWidget(self.attach_btn)
         self.signup_btn = QPushButton("가입하기")
         self.signup_btn.setObjectName("signupBtn")
         self.signup_btn.setStyleSheet("""
@@ -248,9 +299,16 @@ class SignupPage(QWidget):
         self.signup_btn.clicked.connect(self.signup_check)
         form_layout.addSpacing(10)
         form_layout.addWidget(self.signup_btn)
-
-        #중앙 카드 추가
         outer_layout.addWidget(self.central_widget)
+
+    def attach_file(self):
+        file_name, _ = QFileDialog.getOpenFileName(self, "장애인등록증 파일 선택", "", "Images (*.png *.jpg *.jpeg *.bmp *.gif)")
+        if file_name:
+            self.cert_file = file_name
+            self.cert_label.setText(os.path.basename(file_name))
+        else:
+            self.cert_file = None
+            self.cert_label.setText("장애인등록증 파일 없음")
 
     def signup_check(self):
         new_id = self.id_input.text().strip()
@@ -268,10 +326,22 @@ class SignupPage(QWidget):
         if get_user(new_id):
             QMessageBox.warning(self, "회원가입 오류", "이미 존재하는 학번입니다.")
             return
-
-        save_user(new_id, new_pw, question, answer)
+        cert_path = None
+        if self.cert_file:
+            upload_dir = os.path.join(os.path.dirname(__file__), "uploads")
+            os.makedirs(upload_dir, exist_ok=True)
+            basename = f"{new_id}_" + os.path.basename(self.cert_file)
+            dest = os.path.join(upload_dir, basename)
+            try:
+                shutil.copy2(self.cert_file, dest)
+                cert_path = dest
+            except Exception as e:
+                QMessageBox.warning(self, "첨부 오류", f"파일 복사 실패: {e}")
+                return
+        save_user(new_id, new_pw, question, answer, cert_path)
         QMessageBox.information(self, "회원가입 성공", f"{new_id}님, 회원가입이 완료되었습니다.")
         self.main_window.navigate_to(0)
+
 class PasswordFindPage(QWidget):
     def __init__(self, main_window):
         super().__init__()
@@ -280,29 +350,22 @@ class PasswordFindPage(QWidget):
         self.initUI()
 
     def initUI(self):
-        # 배경 이미지 라벨
         self.bg_image = QLabel(self)
-        bg_path = os.path.join(os.path.dirname(__file__), "HelpMeal.png")  # 이미지 파일명
-
+        bg_path = os.path.join(os.path.dirname(__file__), "HelpMeal.png")
         if os.path.exists(bg_path):
             pixmap = QPixmap(bg_path)
             self.bg_image.pixmap = pixmap
             self.bg_image.setPixmap(pixmap)
             self.bg_image.setScaledContents(True)
             self.bg_image.setGeometry(0, 0, self.width(), self.height())
-
-            # 투명도 효과 (0.0 ~ 1.0 사이, 0.3 추천)
             opacity = QGraphicsOpacityEffect()
             opacity.setOpacity(0.3)
             self.bg_image.setGraphicsEffect(opacity)
-
-            self.bg_image.lower()  # 다른 위젯 뒤로 보냄
+            self.bg_image.lower()
         self.setStyleSheet("background-color: white;")
-
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.setSpacing(0)
-
         self.central_widget = QWidget()
         self.central_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.central_widget.setStyleSheet("""
@@ -311,10 +374,8 @@ class PasswordFindPage(QWidget):
             padding: 16px;
             border: 1px solid #ccc;
         """)
-
         form_layout = QVBoxLayout(self.central_widget)
         form_layout.setSpacing(12)
-
         title_label = QLabel("비밀번호 찾기")
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setStyleSheet("""
@@ -340,7 +401,6 @@ class PasswordFindPage(QWidget):
             label.setFont(QFont("Noto Sans KR", 12, QFont.Bold))
             form_layout.addWidget(label)
             form_layout.addWidget(widget)
-
         self.id_input = QLineEdit()
         self.id_input.setPlaceholderText("학번 입력")
         self.id_input.setStyleSheet("""
@@ -350,7 +410,6 @@ class PasswordFindPage(QWidget):
             font-size: 16px;
             border: 1px solid #ddd;
         """)
-
         self.answer_input = QLineEdit()
         self.answer_input.setPlaceholderText("질문에 대한 답변 입력")
         self.answer_input.setStyleSheet("""
@@ -360,7 +419,6 @@ class PasswordFindPage(QWidget):
             font-size: 16px;
             border: 1px solid #ddd;
         """)
-
         self.question_display = QLabel("질문이 여기에 표시됩니다.")
         self.question_display.setFont(QFont("Noto Sans KR", 11))
         self.question_display.setStyleSheet("""
@@ -370,7 +428,6 @@ class PasswordFindPage(QWidget):
             font-size: 16px;
             border: 1px solid #ddd;
         """)
-
         self.find_btn = QPushButton("확인")
         self.find_btn.setStyleSheet("""
             background-color: #99c2ff;
@@ -380,16 +437,13 @@ class PasswordFindPage(QWidget):
             font-size: 18px;
             font-weight: bold;
         """)
-
         self.find_btn.clicked.connect(self.check_answer)
         self.id_input.textChanged.connect(self.display_question)
-
         add_field("학번", self.id_input)
         form_layout.addWidget(self.question_display)
         add_field("답변", self.answer_input)
         form_layout.addSpacing(10)
         form_layout.addWidget(self.find_btn)
-
         outer_layout.addWidget(self.central_widget)
 
     def display_question(self):
@@ -408,55 +462,44 @@ class PasswordFindPage(QWidget):
 
 class MainWindow(QWidget):
     def __init__(self):
-        self.current_user_id = None  # 로그인한 학번 저장용
+        self.current_user_id = None
         super().__init__()
         self.setWindowTitle("HelpMeal")
         self.resize(1200, 800)
-
         self.stack = QStackedWidget()
         self.history = []
         self.history_index = -1
-
         self.login_page = LoginPage(self)
         self.signup_page = SignupPage(self)
         self.password_page = PasswordFindPage(self)
         self.restaurant_page = RestaurantReservation(self)
-
-        self.stack.addWidget(self.login_page)         # index 0
-        self.stack.addWidget(self.signup_page)        # index 1
-        self.stack.addWidget(self.restaurant_page)    # index 2
-        self.stack.addWidget(self.password_page)      # index 3
-
-        # ⏪ 뒤로가기/앞으로가기 버튼 - 텍스트 <> 아이콘 형태
+        self.stack.addWidget(self.login_page)
+        self.stack.addWidget(self.signup_page)
+        self.stack.addWidget(self.restaurant_page)
+        self.stack.addWidget(self.password_page)
         self.back_btn = QPushButton("<")
         self.back_btn.setFixedSize(32, 32)
         self.back_btn.setFlat(True)
         self.back_btn.clicked.connect(self.go_back)
-
         self.forward_btn = QPushButton(">")
         self.forward_btn.setFixedSize(32, 32)
         self.forward_btn.setFlat(True)
         self.forward_btn.clicked.connect(self.go_forward)
-
         nav_layout = QHBoxLayout()
-        nav_layout.addStretch()  # 먼저 여유 공간을 줘야 오른쪽으로 붙음
+        nav_layout.addStretch()
         nav_layout.addWidget(self.back_btn)
         nav_layout.addWidget(self.forward_btn)
-        nav_layout.setContentsMargins(10, 10, 10, 0)  # 여백은 그대로
-
+        nav_layout.setContentsMargins(10, 10, 10, 0)
         layout = QVBoxLayout()
         layout.addLayout(nav_layout)
         layout.addWidget(self.stack)
         self.setLayout(layout)
-
         self.navigate_to(0)
-
     def navigate_to(self, index):
         self.stack.setCurrentIndex(index)
         self.history = self.history[:self.history_index + 1]
         self.history.append(index)
         self.history_index += 1
-
     def go_back(self):
         if hasattr(self, 'sidebar_dialog') and self.sidebar_dialog.isVisible():
             self.sidebar_dialog.close()
@@ -464,69 +507,56 @@ class MainWindow(QWidget):
         if self.history_index > 0:
             self.history_index -= 1
             self.stack.setCurrentIndex(self.history[self.history_index])
-
     def go_forward(self):
         if self.history_index < len(self.history) - 1:
             self.history_index += 1
             self.stack.setCurrentIndex(self.history[self.history_index])
-
     def show_sidebar(self):
         self.sidebar_dialog = QDialog(self)
         self.sidebar_dialog.setWindowFlags(Qt.FramelessWindowHint)
         self.sidebar_dialog.setModal(True)
         self.sidebar_dialog.setStyleSheet("background-color: rgba(0, 0, 0, 70);")
         self.sidebar_dialog.setFixedSize(self.width(), self.height())
-
-        # 사이드바 (왼쪽 60%)
         sidebar_panel = QWidget(self.sidebar_dialog)
         sidebar_panel.setGeometry(0, 0, int(self.width() * 0.6), self.height())
         sidebar_panel.setStyleSheet("background-color: white;")
-
         sidebar_layout = QVBoxLayout(sidebar_panel)
         sidebar_layout.setContentsMargins(30, 30, 30, 30)
         sidebar_layout.setSpacing(20)
-
         user_label = QLabel(f"학번 : {self.current_user_id or '알 수 없음'}")
         user_label.setFont(QFont("Arial", 14, QFont.Bold))
         sidebar_layout.addWidget(user_label)
-
         logout_btn = QPushButton("로그아웃")
         logout_btn.clicked.connect(lambda: self.logout())
         sidebar_layout.addWidget(logout_btn)
-
         tts_checkbox = QCheckBox("TTS 음성안내")
         tts_checkbox.setChecked(AppSettings.tts_enabled)
         tts_checkbox.stateChanged.connect(lambda state: setattr(AppSettings, 'tts_enabled', state == Qt.Checked))
         sidebar_layout.addWidget(tts_checkbox)
-
         contrast_checkbox = QCheckBox("고대비 모드")
         contrast_checkbox.stateChanged.connect(self.toggle_contrast_global)
         sidebar_layout.addWidget(contrast_checkbox)
-
         profile_btn = QPushButton("개인정보 관리")
+        profile_btn.clicked.connect(self.show_profile_dialog)
         sidebar_layout.addWidget(profile_btn)
-
         sidebar_layout.addStretch()
-
-        # 오른쪽 클릭영역: 나머지 40% 클릭 시 닫히게
         overlay = QPushButton(self.sidebar_dialog)
         overlay.setGeometry(int(self.width() * 0.6), 0, int(self.width() * 0.4), self.height())
         overlay.setStyleSheet("background-color: transparent;")
         overlay.setCursor(Qt.PointingHandCursor)
         overlay.clicked.connect(self.sidebar_dialog.close)
-
         self.sidebar_dialog.show()
-
     def logout(self):
         self.sidebar_dialog.close()
         self.navigate_to(0)
-
     def toggle_contrast_global(self, state):
         if state == Qt.Checked:
             self.setStyleSheet("background-color: black; color: white;")
         else:
             self.setStyleSheet("")
-
+    def show_profile_dialog(self):
+        dlg = ProfileDialog(self.current_user_id, self)
+        dlg.exec_()
 
 if __name__ == "__main__":
     init_db()
