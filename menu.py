@@ -38,162 +38,20 @@ def fetch_today_and_week_menus(force_weekday=None):
             parts = data_table.split("-")
             if len(parts) != 4:
                 continue
+
             식당코드, _, 시간코드, 요일코드 = parts
             식당 = code_to_name.get(식당코드, None)
             if not 식당:
                 continue
+
             요일 = weekday_map[int(요일코드)]
             header = menu.select_one("h6.card-header")
-            items = menu.select("li.side")
             meal_name = header.text.strip() if header else ""
-            side_dishes = [li.text.strip() for li in items]
+
             if meal_name:
-                menu_text = '/'.join(side_dishes)
-                results[식당][요일].setdefault(meal_name, []).append(menu_text)
+                # ✅ 사이드 디쉬 제거 — 메뉴 본문 저장 안 함
+                results[식당][요일].setdefault(meal_name, [])
         return results, weekday_map
     except Exception as e:
         print("메뉴 불러오기 실패:", e)
         return {"한빛식당": {}, "별빛식당": {}, "은하수식당": {}}, ['월요일','화요일','수요일','목요일','금요일']
-
-class RestaurantReservation(QWidget):
-    def __init__(self, main_window, force_weekday=None):
-        super().__init__()
-        self.main_window = main_window  # ← 추가
-        self.current_user_id = None
-        self.force_weekday = force_weekday
-        self.initUI()
-
-    def set_user(self, user_id):
-        self.current_user_id = user_id
-
-    def apply_high_contrast(self):
-        self.setStyleSheet("""
-            QWidget {
-                background-color: black;
-                color: white;
-            }
-            QLabel {
-                color: white;
-            }
-            QPushButton {
-                background-color: #333;
-                color: white;
-                border: 1px solid white;
-            }
-            QLineEdit {
-                background-color: #222;
-                color: white;
-                border: 1px solid white;
-            }
-            QGroupBox {
-                border: 1px solid white;
-            }
-        """)
-
-    def reset_contrast(self):
-        self.setStyleSheet("")
-
-    def initUI(self):
-        main_layout = QVBoxLayout()
-        title = QLabel("학식 예약 시스템")
-        title.setFont(QFont("Arial", 18, QFont.Bold))
-        title.setAlignment(Qt.AlignCenter)
-        main_layout.addWidget(title)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        content = QWidget()
-        content_layout = QVBoxLayout()
-
-        full_menus, weekday_map = fetch_today_and_week_menus()
-        today_index = self.force_weekday if self.force_weekday is not None else datetime.today().weekday()
-        if today_index >= len(weekday_map):
-            today_index = 0
-        today = weekday_map[today_index]
-
-        for name, menus in full_menus.items():
-            group = QGroupBox(name)
-            layout = QVBoxLayout()
-            menu_dict = menus.get(today, {})
-
-            keys = list(menu_dict.keys())
-            if name == "한빛식당" and len(keys) >= 2:
-                keys[0], keys[1] = keys[1], keys[0]
-            elif name == "은하수식당" and len(keys) >= 2:
-                keys[0], keys[1] = keys[1], keys[0]
-            display_order = keys
-            for meal_name in display_order:
-                dishes = menu_dict[meal_name]
-                layout.addWidget(QLabel(f"<b>{meal_name}</b>: {' + '.join(dishes)}"))
-
-            to_addr = address_map.get(name, None)
-            layout.addWidget(QLabel(f"식당 주소: {to_addr}"))
-
-            map_btn = QPushButton("카카오맵 길찾기")
-            map_btn.clicked.connect(lambda _, t=to_addr: self.open_kakao_map_route(t))
-            layout.addWidget(map_btn)
-
-            more_btn = QPushButton("메뉴 더보기")
-            more_btn.clicked.connect(lambda _, n=name, m=menus: self.show_full_menu(n, m, weekday_map))
-            layout.addWidget(more_btn)
-
-            reserve_button = QPushButton("예약하기")
-            reserve_button.clicked.connect(lambda _, r=name: self.reserve_seat_dialog(r))
-            layout.addWidget(reserve_button)
-
-            review_button = QPushButton("후기 보기/작성")
-            review_button.clicked.connect(lambda _, r=name: self.open_review_dialog(r))
-            layout.addWidget(review_button)
-
-            group.setLayout(layout)
-            content_layout.addWidget(group)
-
-        content.setLayout(content_layout)
-        scroll.setWidget(content)
-        main_layout.addWidget(scroll)
-        self.setLayout(main_layout)
-
-        logout_button = QPushButton("로그아웃")
-        logout_button.clicked.connect(lambda: self.main_window.navigate_to(0))
-        layout.addWidget(logout_button)
-
-    def show_full_menu(self, name, menus, weekday_map):
-        dialog = QDialog(self)
-        dialog.setWindowTitle(f"{name} 한주간 메뉴")
-        dialog.resize(1200, 8000)
-        dlg_layout = QVBoxLayout()
-        for 요일 in weekday_map:
-            day_label = QLabel(f"<b>{요일}</b>")
-            dlg_layout.addWidget(day_label)
-            menu_dict = menus.get(요일, {})
-            keys = list(menu_dict.keys())
-            if name == "한빛식당" and len(keys) >= 2:
-                keys[0], keys[1] = keys[1], keys[0]
-            elif name == "은하수식당" and len(keys) >= 2:
-                keys[0], keys[1] = keys[1], keys[0]
-            display_order = keys
-            for meal_name in display_order:
-                dishes = menu_dict[meal_name]
-                meal_text = QLabel(f"<b>{meal_name}</b>: {' + '.join(dishes)}")
-                dlg_layout.addWidget(meal_text)
-        dialog.setLayout(dlg_layout)
-        dialog.exec_()
-
-    def reserve_seat_dialog(self, restaurant_name):
-        if not self.current_user_id:
-            QMessageBox.warning(self, "오류", "먼저 로그인하세요.")
-            return
-        reserve_seat(self, restaurant_name, self.current_user_id)
-
-    def open_review_dialog(self, restaurant_name):
-        if not self.current_user_id:
-            QMessageBox.warning(self, "오류", "먼저 로그인하세요.")
-            return
-        dialog = ReviewDialog(restaurant_name, self.current_user_id, self)
-        dialog.exec_()
-
-    def open_kakao_map_route(self, to_addr):
-        if to_addr:
-            encoded_to = urllib.parse.quote(to_addr)
-            url = f"https://map.kakao.com/?eName={encoded_to}"
-            webbrowser.open(url)
