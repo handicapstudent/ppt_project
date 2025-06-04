@@ -1,11 +1,11 @@
 import sqlite3
 from PyQt5.QtWidgets import (
     QDialog, QTextEdit, QPushButton, QVBoxLayout, QLabel,
-    QMessageBox, QComboBox, QHBoxLayout, QListWidget, QListWidgetItem
+    QMessageBox, QComboBox, QHBoxLayout, QListWidget, QListWidgetItem, QSlider
 )
 from PyQt5.QtCore import Qt
 from datetime import datetime
-
+from PyQt5.QtGui import QFont
 DB_FILE = "review.db"
 
 
@@ -76,8 +76,44 @@ class ReviewDialog(QDialog):
         self.init_ui()
 
     def init_ui(self):
+        self.rating_value = 3
         self.setWindowTitle("후기 작성")
-        self.setMinimumSize(100, 100)
+        self.setMinimumSize(500, 600)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #f4f6f8;
+            }
+            QLabel {
+                font-size: 14px;
+            }
+            QTextEdit {
+                background-color: white;
+                border: 1px solid #ccc;
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 13px;
+            }
+            QComboBox{
+                padding: 4px;
+                font-size: 13px;
+            }
+            QPushButton {
+                background-color: #1976d2;
+                color: white;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #125ea3;
+            }
+            QListWidget {
+                background-color: white;
+                border: 1px solid #ccc;
+                border-radius: 6px;
+                font-size: 13px;
+            }
+        """)
 
         layout = QVBoxLayout()
 
@@ -88,13 +124,24 @@ class ReviewDialog(QDialog):
         self.text_edit.setPlaceholderText("이곳에 후기를 입력하세요...")
         layout.addWidget(self.text_edit)
 
+
         rating_layout = QHBoxLayout()
         rating_label = QLabel("별점:")
-        self.rating_combo = QComboBox()
-        self.rating_combo.addItems([str(i) for i in range(1, 6)])
-        rating_layout.addWidget(rating_label)
-        rating_layout.addWidget(self.rating_combo)
+        self.stars = []
+        for i in range(5):
+            star = QLabel("☆")
+            star.setFont(QFont("Arial", 26))
+            star.setStyleSheet("color: gold;")
+            star.setAlignment(Qt.AlignCenter)
+            star.setFixedWidth(34)
+            star.mousePressEvent = self.make_star_clicked_handler(i + 1)
+            self.stars.append(star)
+            rating_layout.addWidget(star)
+
+        self.update_star_display()
         layout.addLayout(rating_layout)
+
+
 
         self.submit_button = QPushButton("후기 제출")
         self.submit_button.clicked.connect(self.submit_review)
@@ -112,13 +159,26 @@ class ReviewDialog(QDialog):
         self.setLayout(layout)
         self.load_reviews()
 
+    def make_star_clicked_handler(self, rating):
+        def handler(event):
+            self.rating_value = rating
+            self.update_star_display()
+
+        return handler
+
+    def update_star_display(self):
+        for i, star in enumerate(self.stars):
+            star.setText("★" if i < self.rating_value else "☆")
+
     def load_reviews(self):
         self.review_list.clear()
         self.reviews = get_reviews_by_user(self.user_id)
         for review_id, text, rating, timestamp in self.reviews:
-            display_text = f"[{timestamp}] ({rating}⭐)\n{text}"
+            stars = "★" * rating + "☆" * (5 - rating)
+            display_text = f"[{timestamp}]  {stars}\n{text}"
             item = QListWidgetItem(display_text)
             item.setData(Qt.UserRole, review_id)
+            item.setFont(QFont("Noto Sans KR", 11))
             self.review_list.addItem(item)
 
     def submit_review(self):
@@ -126,7 +186,7 @@ class ReviewDialog(QDialog):
         if not review_text:
             QMessageBox.warning(self, "입력 오류", "후기를 입력해주세요.")
             return
-        rating = int(self.rating_combo.currentText())
+        rating = self.rating_value
 
         if self.current_edit_id:
             update_review(self.current_edit_id, review_text, rating)
@@ -144,7 +204,8 @@ class ReviewDialog(QDialog):
             if rid == review_id:
                 self.current_edit_id = rid
                 self.text_edit.setText(text)
-                self.rating_combo.setCurrentText(str(rating))
+                self.rating_value = rating
+                self.update_star_display()
                 break
 
     def delete_selected_review(self):
@@ -158,5 +219,4 @@ class ReviewDialog(QDialog):
         self.text_edit.clear()
         self.current_edit_id = None
         self.load_reviews()
-
 
