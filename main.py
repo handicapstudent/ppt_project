@@ -13,6 +13,7 @@ from PyQt5.QtCore import Qt
 from reservation_utils import init_db, get_user, save_user
 from settings import AppSettings
 from tts import speak
+from Magnifier import Magnifier
 
 class ProfileDialog(QDialog):
     def __init__(self, user_id, parent=None):
@@ -465,6 +466,14 @@ class MainWindow(QWidget):
         self.current_user_id = None
         super().__init__()
         self.setWindowTitle("HelpMeal")
+        self.magnifier_btn = QPushButton("🔍 돋보기", self)
+        self.magnifier_btn.setCheckable(True)
+        self.magnifier_btn.setStyleSheet("font-size:18px; background:#eaf5ff; border-radius:10px; padding:6px 16px;")
+        self.magnifier_btn.setFixedSize(100, 36)
+        self.magnifier_btn.move(self.width()-130, 10)   # 윈도우 우측 상단 여백 10
+        self.magnifier_btn.raise_()
+        self.magnifier_btn.toggled.connect(self.toggle_magnifier)
+        self.magnifier = Magnifier(self)
         self.resize(1200, 800)
         self.stack = QStackedWidget()
         self.history = []
@@ -557,6 +566,17 @@ class MainWindow(QWidget):
     def show_profile_dialog(self):
         dlg = ProfileDialog(self.current_user_id, self)
         dlg.exec_()
+        
+    def resizeEvent(self, event):
+    # 창 크기 변경 시 돋보기 버튼 위치 유지
+        self.magnifier_btn.move(self.width()-130, 10)
+        super().resizeEvent(event)
+
+    def toggle_magnifier(self, checked):
+        if checked:
+            self.magnifier.start()
+        else:
+            self.magnifier.stop()
 
 if __name__ == "__main__":
     init_db()
