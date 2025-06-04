@@ -1,4 +1,4 @@
-# main.py
+    # main.py
 import os
 import sys
 import shutil
@@ -9,11 +9,10 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QPixmap, QFont, QIcon
 from PyQt5.QtCore import Qt
-
+from Magnifier import Magnifier
 from reservation_utils import init_db, get_user, save_user
 from settings import AppSettings
 from tts import speak
-from Magnifier import Magnifier
 
 class ProfileDialog(QDialog):
     def __init__(self, user_id, parent=None):
@@ -166,6 +165,9 @@ class LoginPage(QWidget):
 
         accessibility_layout = QHBoxLayout()
         contrast_checkbox = QCheckBox("고대비 모드")
+        contrast_checkbox.setObjectName("contrast_checkbox")  # ✅ 이거 꼭 추가
+
+
         contrast_checkbox.setFont(QFont("Noto Sans KR", 18))
         contrast_checkbox.setChecked(False)
         contrast_checkbox.stateChanged.connect(self.toggle_contrast)
@@ -177,6 +179,7 @@ class LoginPage(QWidget):
 
         accessibility_layout.addWidget(contrast_checkbox)
         accessibility_layout.addWidget(tts_checkbox)
+
         central_layout.addLayout(accessibility_layout)
         central_layout.addLayout(link_layout)
 
@@ -184,7 +187,12 @@ class LoginPage(QWidget):
         self.pw_input.returnPressed.connect(login_btn.click)
 
     def toggle_contrast(self, state):
-        self.central_widget.setStyleSheet("background-color: black; border-radius: 32px;" if state else "background-color: rgba(255, 255, 255, 230); border-radius: 32px;")
+        self.central_widget.setStyleSheet(
+            "background-color: black; border-radius: 32px;" if state else
+            "background-color: rgba(255, 255, 255, 230); border-radius: 32px;"
+        )
+        # 🔁 전역 고대비도 즉시 반영
+        self.main_window.toggle_contrast_global(state)
 
     def login_check(self):
         user_id = self.id_input.text()
@@ -195,11 +203,20 @@ class LoginPage(QWidget):
                 speak("로그인 되셨습니다.")
             self.main_window.current_user_id = user_id
             self.main_window.restaurant_page.set_user(user_id)
+
+            # ✅ 고대비 체크박스 상태 전달
+            checkbox = self.findChild(QCheckBox, "contrast_checkbox")
+            if checkbox and checkbox.isChecked():
+                self.main_window.toggle_contrast_global(Qt.Checked)
+            else:
+                self.main_window.toggle_contrast_global(Qt.Unchecked)
+
             self.main_window.navigate_to(2)
         else:
             if AppSettings.tts_enabled:
                 speak("학번 또는 비밀번호가 틀렸습니다.")
             QMessageBox.warning(self, "로그인 실패", "학번 또는 비밀번호가 틀렸습니다.")
+
 
 class SignupPage(QWidget):
     def __init__(self, main_window):
@@ -207,6 +224,32 @@ class SignupPage(QWidget):
         self.main_window = main_window
         self.cert_file = None
         self.initUI()
+
+    def apply_high_contrast(self):
+        self.central_widget.setStyleSheet("""
+            background-color: black;
+            color: black;
+            border: 1px solid white;
+        """)
+        self.setStyleSheet("""
+            QLabel, QLineEdit, QComboBox {
+                background-color: white;
+                color: black;
+                border: 1px solid black;
+            }
+            QPushButton {
+                background-color: #ccc;
+                color: black;
+                border: 1px solid black;
+            }
+        """)
+
+    def reset_contrast(self):
+        self.central_widget.setStyleSheet("""
+            background-color: white;
+            border: 1px solid #ccc;
+        """)
+        self.setStyleSheet("")  # 전체 초기화
 
     def initUI(self):
         self.setStyleSheet("background-color: white;")
@@ -461,19 +504,37 @@ class PasswordFindPage(QWidget):
         else:
             QMessageBox.warning(self, "오류", "답변이 일치하지 않습니다.")
 
+    def apply_high_contrast(self):
+        self.central_widget.setStyleSheet("""
+            background-color: black;
+            color: black;
+            border: 1px solid white;
+        """)
+        self.setStyleSheet("""
+            QLabel, QLineEdit {
+                background-color: white;
+                color: black;
+                border: 1px solid black;
+            }
+            QPushButton {
+                background-color: #ccc;
+                color: black;
+                border: 1px solid black;
+            }
+        """)
+
+    def reset_contrast(self):
+        self.central_widget.setStyleSheet("""
+            background-color: white;
+            border: 1px solid #ccc;
+    """)
+        self.setStyleSheet("")  # 전체 초기화
+
 class MainWindow(QWidget):
     def __init__(self):
         self.current_user_id = None
         super().__init__()
         self.setWindowTitle("HelpMeal")
-        self.magnifier_btn = QPushButton("🔍 돋보기", self)
-        self.magnifier_btn.setCheckable(True)
-        self.magnifier_btn.setStyleSheet("font-size:18px; background:#eaf5ff; border-radius:10px; padding:6px 16px;")
-        self.magnifier_btn.setFixedSize(100, 36)
-        self.magnifier_btn.move(self.width()-130, 10)   # 윈도우 우측 상단 여백 10
-        self.magnifier_btn.raise_()
-        self.magnifier_btn.toggled.connect(self.toggle_magnifier)
-        self.magnifier = Magnifier(self)
         self.resize(1200, 800)
         self.stack = QStackedWidget()
         self.history = []
@@ -494,16 +555,50 @@ class MainWindow(QWidget):
         self.forward_btn.setFixedSize(32, 32)
         self.forward_btn.setFlat(True)
         self.forward_btn.clicked.connect(self.go_forward)
+
+        self.magnifier_btn = QPushButton("🔍")
+        self.magnifier_btn.setCheckable(True)
+        self.magnifier_btn.setFixedSize(36, 36)
+        self.magnifier_btn.setStyleSheet("font-size:18px; background:#f0f0f0; border-radius:8px;")
+        self.magnifier_btn.toggled.connect(self.toggle_magnifier)
+        self.magnifier = Magnifier(self)
+
         nav_layout = QHBoxLayout()
         nav_layout.addStretch()
+
+        nav_layout.addWidget(self.magnifier_btn)  # 🔍 맨 앞
         nav_layout.addWidget(self.back_btn)
         nav_layout.addWidget(self.forward_btn)
         nav_layout.setContentsMargins(10, 10, 10, 0)
-        layout = QVBoxLayout()
-        layout.addLayout(nav_layout)
-        layout.addWidget(self.stack)
-        self.setLayout(layout)
+
+        # QStackedLayout 사용 대신 QFrame을 오버레이로 만들어서 절대 위치로 겹치기
+        container = QWidget(self)
+        container.setStyleSheet("background-color: transparent;")
+        container.setGeometry(0, 0, 1200, 800)
+
+        # 스택과 네비게이션을 같은 위치 위에 배치
+        self.stack.setParent(container)
+        self.stack.setGeometry(0, 0, 1200, 800)
+
+        nav_frame = QFrame(container)
+        nav_frame.setGeometry(1200 - 130, 10, 120, 40)
+        nav_layout = QHBoxLayout(nav_frame)
+        nav_layout.setContentsMargins(0, 0, 0, 0)
+        nav_layout.setSpacing(10)
+        nav_layout.insertWidget(0, self.magnifier_btn)  # ✅ 맨 앞에 삽입
+        nav_layout.addWidget(self.back_btn)
+        nav_layout.addWidget(self.forward_btn)
+
+        self.setLayout(QVBoxLayout())  # 빈 레이아웃 (필수)
+
         self.navigate_to(0)
+
+    def toggle_magnifier(self, checked):
+        if checked:
+            self.magnifier.start()
+        else:
+            self.magnifier.stop()
+
     def navigate_to(self, index):
         self.stack.setCurrentIndex(index)
         self.history = self.history[:self.history_index + 1]
@@ -520,63 +615,48 @@ class MainWindow(QWidget):
         if self.history_index < len(self.history) - 1:
             self.history_index += 1
             self.stack.setCurrentIndex(self.history[self.history_index])
-    def show_sidebar(self):
-        self.sidebar_dialog = QDialog(self)
-        self.sidebar_dialog.setWindowFlags(Qt.FramelessWindowHint)
-        self.sidebar_dialog.setModal(True)
-        self.sidebar_dialog.setStyleSheet("background-color: rgba(0, 0, 0, 70);")
-        self.sidebar_dialog.setFixedSize(self.width(), self.height())
-        sidebar_panel = QWidget(self.sidebar_dialog)
-        sidebar_panel.setGeometry(0, 0, int(self.width() * 0.6), self.height())
-        sidebar_panel.setStyleSheet("background-color: white;")
-        sidebar_layout = QVBoxLayout(sidebar_panel)
-        sidebar_layout.setContentsMargins(30, 30, 30, 30)
-        sidebar_layout.setSpacing(20)
-        user_label = QLabel(f"학번 : {self.current_user_id or '알 수 없음'}")
-        user_label.setFont(QFont("Arial", 14, QFont.Bold))
-        sidebar_layout.addWidget(user_label)
-        logout_btn = QPushButton("로그아웃")
-        logout_btn.clicked.connect(lambda: self.logout())
-        sidebar_layout.addWidget(logout_btn)
-        tts_checkbox = QCheckBox("TTS 음성안내")
-        tts_checkbox.setChecked(AppSettings.tts_enabled)
-        tts_checkbox.stateChanged.connect(lambda state: setattr(AppSettings, 'tts_enabled', state == Qt.Checked))
-        sidebar_layout.addWidget(tts_checkbox)
-        contrast_checkbox = QCheckBox("고대비 모드")
-        contrast_checkbox.stateChanged.connect(self.toggle_contrast_global)
-        sidebar_layout.addWidget(contrast_checkbox)
-        profile_btn = QPushButton("개인정보 관리")
-        profile_btn.clicked.connect(self.show_profile_dialog)
-        sidebar_layout.addWidget(profile_btn)
-        sidebar_layout.addStretch()
-        overlay = QPushButton(self.sidebar_dialog)
-        overlay.setGeometry(int(self.width() * 0.6), 0, int(self.width() * 0.4), self.height())
-        overlay.setStyleSheet("background-color: transparent;")
-        overlay.setCursor(Qt.PointingHandCursor)
-        overlay.clicked.connect(self.sidebar_dialog.close)
-        self.sidebar_dialog.show()
+
+    def open_profile_dialog(self):
+        if self.current_user_id:
+            dialog = ProfileDialog(self.current_user_id, self)
+            dialog.exec_()
+
     def logout(self):
         self.sidebar_dialog.close()
         self.navigate_to(0)
+
     def toggle_contrast_global(self, state):
         if state == Qt.Checked:
-            self.setStyleSheet("background-color: black; color: white;")
+            self.setStyleSheet("""
+                QWidget {
+                    background-color: black;
+                    color: white;
+                }
+                QPushButton {
+                    background-color: #333;
+                    color: white;
+                    border: 1px solid white;
+                }
+                QLabel, QCheckBox, QLineEdit {
+                    color: white;
+                    background-color: #222;
+                }
+                QLineEdit {
+                    border: 1px solid white;
+                }
+            """)
+            self.back_btn.setStyleSheet("background-color: black; color: white; border: 1px solid white;")
+            self.forward_btn.setStyleSheet("background-color: black; color: white; border: 1px solid white;")
+            self.restaurant_page.apply_high_contrast()
+            self.signup_page.apply_high_contrast()
+            self.password_page.apply_high_contrast() # ✅ 추가
         else:
             self.setStyleSheet("")
-    def show_profile_dialog(self):
-        dlg = ProfileDialog(self.current_user_id, self)
-        dlg.exec_()
-        
-    def resizeEvent(self, event):
-    # 창 크기 변경 시 돋보기 버튼 위치 유지
-        self.magnifier_btn.move(self.width()-130, 10)
-        super().resizeEvent(event)
-
-    def toggle_magnifier(self, checked):
-        if checked:
-            self.magnifier.start()
-        else:
-            self.magnifier.stop()
+            self.back_btn.setStyleSheet("")
+            self.forward_btn.setStyleSheet("")
+            self.restaurant_page.reset_contrast()
+            self.signup_page.reset_contrast()  # ✅ 추가
+            self.password_page.reset_contrast()  # ✅ 추가
 
 if __name__ == "__main__":
     init_db()
