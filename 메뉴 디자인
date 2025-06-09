@@ -1,10 +1,12 @@
+import os
+
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QGridLayout,
-    QFrame, QMessageBox, QDialog, QScrollArea
+    QFrame, QMessageBox, QDialog, QScrollArea, QSizePolicy
 )
 from PyQt5.QtGui import QFont, QPixmap
 from PyQt5.QtCore import Qt
-import os
+
 from menu import fetch_today_and_week_menus
 from review import ReviewDialog
 from reservation_utils import reserve_seat
@@ -16,6 +18,7 @@ address_map = {
     "별빛식당": "충북 청주시 서원구 충대로 1 제1학생회관",
     "은하수식당": "충북대학교 은하수 식당"
 }
+
 
 class MenuCard(QFrame):
     def __init__(self, title, callback, image_path=None):
@@ -61,91 +64,120 @@ class RestaurantSelectDialog(QDialog):
     def __init__(self, title, callback, parent=None):
         super().__init__(parent)
         self.setWindowTitle(title)
-        self.setFixedSize(400, 200)
+        self.setFixedSize(800, 200)  # 창크기 변경
         layout = QVBoxLayout()
         grid = QGridLayout()
 
-        restaurants = ["한빛식당", "별빛식당", "은하수식당"]
-        for i, name in enumerate(restaurants):
-            btn = QPushButton(name)
-            btn.setStyleSheet("padding: 20px; font-size: 16px;")
-            btn.clicked.connect(self.make_btn_callback(name, callback))
-            grid.addWidget(btn, 0, i)  # 한 줄에 배치
-
+        cards = [  # 변경 시작
+            ("한빛식당", "assets/메뉴보기.png"),
+            ("별빛식당", "assets/별똥별.png"),
+            ("은하수식당", "assets/은하수.png"),
+        ]
+        for i, (arg, image) in enumerate(cards):
+            card = MenuCard(arg, lambda cb=self.select_restaurant: cb(arg, callback), image)
+            grid.addWidget(card, 0, i)  # 한 줄에 배치
+            # 변경 끝
         layout.addLayout(grid)
         self.setLayout(layout)
-
-    def make_btn_callback(self, restaurant_name, callback):
-        return lambda _: self.select_restaurant(restaurant_name, callback)
 
     def select_restaurant(self, name, callback):
         self.accept()
         callback(name)
 
+
 class RestaurantReservation(QWidget):
     def __init__(self, parent=None):
-            super().__init__(parent)
-            self.main_window = parent  # ✅ MainWindow 참조 저장
-            self.setWindowTitle("식당 예약 메인")
-            self.setFixedSize(1200, 800)
-            self.current_user_id = None
-            self.initUI()
+        super().__init__(parent)
+        self.main_window = parent  # ✅ MainWindow 참조 저장
+        self.setWindowTitle("식당 예약 메인")
+        self.setFixedSize(1200, 800)
+        self.current_user_id = None
+        self.initUI()
 
-    class StaticMenuCard(QFrame):
-        def __init__(self, title, lines):
+    def apply_high_contrast(self):
+        self.setStyleSheet("""
+            QWidget {
+                background-color: black;
+                color: white;
+            }
+            QPushButton {
+                background-color: #333;
+                color: white;
+                border: 1px solid white;
+            }
+            QLabel, QCheckBox {
+                color: white;
+            }
+        """)
+
+    def reset_contrast(self):
+        self.setStyleSheet("background-color: #f4f6f8;")
+        # 내부 메뉴 카드들은 재생성될 때 자동 스타일링되므로 별도 초기화 필요 없음
+
+    class StaticMenuCard(QWidget):
+        def __init__(self, 요일, dishes):
             super().__init__()
-            self.setStyleSheet("""
-                QFrame {
-                    background-color: white;
-                    border-radius: 10px;
-                    border: 1px solid #e0e0e0;
-                }
-                QLabel {
-                    color: #333;
-                }
-            """)
             layout = QVBoxLayout()
             layout.setContentsMargins(15, 15, 15, 20)
             layout.setSpacing(8)
 
-            title_label = QLabel(title)
-            title_label.setFont(QFont("Noto Sans KR", 11, QFont.Bold))
-            layout.addWidget(title_label)
+            # 요일 라벨 (빨간색)
+            요일_label = QLabel(요일)
+            요일_label.setFont(QFont("Noto Sans KR", 12, QFont.Bold))
+            요일_label.setStyleSheet("color: red; background-color: white")
+            layout.addWidget(요일_label)
 
-            for line in lines:
+            # 각 시간대별 메뉴 라벨
+            for line in dishes:
                 item_label = QLabel(line)
-                item_label.setFont(QFont("Noto Sans KR", 10))
+                item_label.setFont(QFont("Noto Sans KR", 9))
+                item_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                item_label.setWordWrap(True)  # ✅ 줄바꿈
+                item_label.setStyleSheet("""
+                            background-color: white;
+                            border: 1px solid #ccc;
+                            border-radius: 6px;
+                            padding: 4px;
+                        """)
+                item_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
                 layout.addWidget(item_label)
 
             self.setLayout(layout)
+
+            # ✅ 카드 너비는 제한하지만 높이는 자동
+            self.setMinimumWidth(240)
+            self.setMaximumWidth(300)
+            self.setStyleSheet("""
+                        background-color: white;
+                        border: 1px solid #ccc;
+                        border-radius: 10px;
+                    """)
 
     def initUI(self):
         self.setStyleSheet("background-color: #f4f6f8;")
 
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(20, 10, 20, 20)
+        main_layout.setContentsMargins(30, 30, 30, 30)
         main_layout.setSpacing(20)
         # 상단 바
         top_bar = QHBoxLayout()
-        top_bar.setContentsMargins(0,0,0,0)
-        top_bar.setSpacing(6)
-
-        hamburger = QPushButton("☰")
-        hamburger.setFont(QFont("Noto Sans KR", 16))
-        hamburger.setFixedSize(36,36)
-        hamburger.setStyleSheet("QPushButton { border: none; background: transparent; }")
-        hamburger.setCursor(Qt.PointingHandCursor)
-        hamburger.clicked.connect(self.main_window.show_sidebar)  # ✅ 안정적이고 명확
+        top_bar.setContentsMargins(0, 0, 0, 0)
+        # top_bar.setSpacing(6)
+        # logo = QLabel("충북대학교\nCHUNGBUK NATIONAL UNIVERSITY")
+        # logo.setFont(QFont("Arial", 12, QFont.Bold))
 
         logo = QLabel("충북대학교\nCHUNGBUK NATIONAL UNIVERSITY")
-        logo.setFont(QFont("Noto Sans KR", 10, QFont.Bold))
-        logo.setStyleSheet("background: transparent;")
+        logo.setFont(QFont("Arial", 10, QFont.Bold))
         logo.setFixedHeight(40)
-
-
-        top_bar.addWidget(hamburger)
-        top_bar.addSpacing(8)
+        logo.setStyleSheet("""
+            QLabel {
+                background: transparent;
+                line-height: 90%;
+                padding-left: 4px;
+            }
+        """)
         top_bar.addWidget(logo)
+
         top_bar.addStretch()
         main_layout.addLayout(top_bar)
 
@@ -154,12 +186,12 @@ class RestaurantReservation(QWidget):
         grid.setSpacing(10)
 
         cards = [
-            ("한빛식당 메뉴 보기", self.show_menu,"한빛식당", "assets/메뉴보기.png"),
-            ("별빛식당 메뉴 보기", self.show_menu,"별빛식당", "assets/별똥별.png"),
-            ("은하수식당 메뉴 보기", self.show_menu,"은하수식당","assets/은하수.png"),
-            ("좌석 예약하기", lambda:self.select_seat_reservation(), None,"assets/좌석예약.png"),
-            ("후기 작성 게시판", lambda:self.select_review_dialog(), None, "assets/게시판.png"),
-            ("카카오맵 길찾기", lambda:self.select_kakao_map(),None, "assets/지도.png")
+            ("한빛식당 메뉴 보기", self.show_menu, "한빛식당", "assets/메뉴보기.png"),
+            ("별빛식당 메뉴 보기", self.show_menu, "별빛식당", "assets/별똥별.png"),
+            ("은하수식당 메뉴 보기", self.show_menu, "은하수식당", "assets/은하수.png"),
+            ("좌석 예약하기", lambda: self.select_seat_reservation(), None, "assets/좌석예약.png"),
+            ("후기 작성 게시판", lambda: self.select_review_dialog(), None, "assets/게시판.png"),
+            ("카카오맵 길찾기", lambda: self.select_kakao_map(), None, "assets/지도.png")
         ]
 
         for i, (title, callback, arg, image) in enumerate(cards):
@@ -178,7 +210,6 @@ class RestaurantReservation(QWidget):
     def set_user(self, user_id):
         self.current_user_id = user_id
 
-
     def show_menu(self, name):
         menus, weekday_map = fetch_today_and_week_menus()
         if name not in menus:
@@ -187,24 +218,40 @@ class RestaurantReservation(QWidget):
 
         dialog = QDialog(self)
         dialog.setWindowTitle(f"{name} 한주간 메뉴")
-        dialog.resize(600, 500)
+        dialog.resize(1200, 750)
+        # ✅ 배경 이미지 QLabel 생성
+        background_label = QLabel(dialog)
+        background_label.setPixmap(QPixmap("assets/급식표.jpg").scaled(
+            dialog.size(), Qt.IgnoreAspectRatio, Qt.SmoothTransformation))
+        background_label.setGeometry(0, 0, dialog.width(), dialog.height())
 
-        scroll = QScrollArea()
+        # ✅ Scroll 영역 설정
+        scroll = QScrollArea(dialog)
+        scroll.setGeometry(0, 0, dialog.width(), dialog.height())
         scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("background: transparent;")  # 배경透過
+
+        # ✅ 실제 컨텐츠 영역
         content = QWidget()
-        layout = QGridLayout()
-        layout.setSpacing(15)
+        outer_layout = QVBoxLayout()
+        outer_layout.setAlignment(Qt.AlignCenter)
+
+        grid = QGridLayout()
+        grid.setSpacing(15)
+        grid.setAlignment(Qt.AlignCenter)
 
         menu_dict = menus[name]
+
         for i, 요일 in enumerate(weekday_map):
             dishes = []
             for 시간대, items in menu_dict.get(요일, {}).items():
                 dishes.append(f"[{시간대}] {', '.join(items)}")
-            row, col = divmod(i, 2)
+            row, col = divmod(i, 5)
             card = self.StaticMenuCard(요일, dishes)
-            layout.addWidget(card, row, col)
+            grid.addWidget(card, row, col)
 
-        content.setLayout(layout)
+        outer_layout.addLayout(grid)
+        content.setLayout(outer_layout)
         scroll.setWidget(content)
 
         dlg_layout = QVBoxLayout()
@@ -215,7 +262,6 @@ class RestaurantReservation(QWidget):
     def select_seat_reservation(self):
         dialog = RestaurantSelectDialog("식당 선택 (예약)", self.reserve_seat, self)
         dialog.exec_()
-
 
     def reserve_seat(self, restaurant):
         reserve_seat(self, restaurant, self.current_user_id)
